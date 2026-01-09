@@ -349,64 +349,68 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
+    import sqlite3
+    import pandas as pd
+    from datetime import date, timedelta
+
     st.title("🏥 Panel de Control APS - Orán")
-    
-    # Aseguramos que las tablas existan antes de leer
-    inicializar_tablas_sistema() 
-    
-    conn = sqlite3.connect('aps_oran_final.db')
+
+    # 1. CONEXIÓN DIRECTA Y SEGURA
+    db_path = 'aps_oran_final.db'
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # 1. MÉTRICAS RÁPIDAS
-    c1, c2, c3 = st.columns(3)
-    
-    # Usamos sub-try para que una métrica no rompa a las demás
+    # Aseguramos que existan las tablas (si no, las métricas dan error)
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    conn.commit()
+
+    # 2. OBTENER DATOS (Con manejo de errores para que no quede en blanco)
     try:
         total_p = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        c1.metric("Población Censada", f"{total_p} pers.")
-    except: c1.metric("Población Censada", "0 pers.")
+    except: total_p = 0
 
     try:
-        total_c = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        c2.metric("Viviendas Relevadas", f"{total_c}")
-    except: c2.metric("Viviendas Relevadas", "0")
+        total_v = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+    except: total_v = 0
 
-    ronda_v, _ = obtener_ronda_info()
-    c3.metric("Ronda Actual", f"N° {ronda_v}")
+    try:
+        res_r = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        ronda_n = res_r[0] if res_r else "1"
+    except: ronda_n = "1"
+
+    # 3. DIBUJAR LAS MÉTRICAS (AQUÍ ES DONDE SE VEÍAN BLANCAS)
+    # Usamos contenedores para forzar la visualización
+    with st.container():
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Población", f"{total_p} pers.")
+        c2.metric("Viviendas", f"{total_v} casas")
+        c3.metric("Ronda", f"N° {ronda_n}")
 
     st.divider()
 
-    # 2. SECCIÓN DE ALERTAS (Instrucción 07/01/2026)
-    col_alerta1, col_alerta2 = st.columns(2)
-
-    with col_alerta1:
-        st.subheader("🚩 Viviendas en Riesgo")
-        try:
-            df_riesgo = pd.read_sql("SELECT nro_casa, prioridad, registrado_por FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            if not df_riesgo.empty:
-                for _, row in df_riesgo.iterrows():
-                    st.error(f"**Casa {row['nro_casa']}** - {row['prioridad']}")
-            else:
-                st.success("✅ Sin riesgo crítico.")
-        except: st.info("Sin datos de viviendas.")
-
-    with col_alerta2:
-        st.subheader("👶 Alerta de Vacunación")
-        try:
-            fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-            # Esta es la alerta que pediste el 07/01
-            query_v = f"""
-                SELECT i.nombre, i.nro_casa FROM integrantes i 
-                LEFT JOIN vacunas v ON i.dni = v.dni 
-                WHERE i.f_nac > '{fecha_limite}' AND v.dni IS NULL
-            """
-            df_v = pd.read_sql(query_v, conn)
-            if not df_v.empty:
-                st.warning(f"⚠️ {len(df_v)} niños con vacunas pendientes")
-                st.dataframe(df_v, use_container_width=True)
-            else:
-                st.success("✅ Vacunas al día.")
-        except: st.info("Sin datos de vacunas.")
+    # 4. ALERTA DE VACUNACIÓN (Instrucción 07/01/2026)
+    st.subheader("👶 Alerta de Vacunación Infantil")
+    fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
+    
+    try:
+        # Buscamos niños menores de 5 años que no estén en la tabla de vacunas
+        q = f"""
+            SELECT nombre, nro_casa 
+            FROM integrantes 
+            WHERE f_nac > '{fecha_corte}' 
+            AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
+        """
+        df_v = pd.read_sql(q, conn)
+        
+        if not df_v.empty:
+            st.warning(f"Se detectaron {len(df_v)} niños con vacunas pendientes.")
+            st.dataframe(df_v, use_container_width=True)
+        else:
+            st.success("✅ Todos los menores de 5 años tienen sus vacunas al día.")
+    except:
+        st.info("No hay datos de vacunas registrados para analizar.")
 
     conn.close()
 # ==========================================
@@ -1854,6 +1858,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
