@@ -491,7 +491,7 @@ def bloque_2_materno():
             st.error("Error al cargar la tabla. Asegúrese de que los DNI existan en el Censo (Bloque 1).")
         finally:
             conn.close()
-            def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -611,7 +611,7 @@ def bloque_3_vivienda():
             st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo.")
 
     conn.close()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -716,7 +716,7 @@ def bloque_4_vacunas():
             st.warning("⚠️ El DNI no figura en el censo.")
 
     conn.close()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -830,7 +830,7 @@ def bloque_5_nutricion():
         conn.close()
     else:
         st.info("👋 Ingrese un DNI para comenzar la evaluación antropométrica.")
-        def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -949,7 +949,7 @@ def bloque_6_tbc():
         conn.close()
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
-        def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -1062,7 +1062,7 @@ def bloque_7_estadisticas():
     """)
 
     conn.close()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -1210,7 +1210,7 @@ def bloque_8_analisis():
 def bloque_8_supervisor(): bloque_8_analisis()
 def bloque_8_mapas(): bloque_8_analisis()
 def bloque_8_analisis_agente(): bloque_8_analisis()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -1339,7 +1339,7 @@ def bloque_9_admin():  # <-- Cámbiale el nombre aquí
                 st.success("Sistema en 0. Refresque con F5.")
 
     conn.close()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -1469,6 +1469,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
