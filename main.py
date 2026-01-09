@@ -1794,12 +1794,12 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # NAVEGACION
 # ==========================================
-   def main():
-    inicializar_db()  # Asegura que la DB y las alertas del 07/01 estén listas
+ # Asegúrate de que no haya espacios antes de 'def'
+def main():
+    inicializar_db()
     
     st.sidebar.title("🏥 APS Orán 2026")
     
-    # 1. LISTA DE OPCIONES CON TU NUEVO ORDEN
     opciones = [
         "🏠 Dashboard", 
         "📝 1. Censo", 
@@ -1817,83 +1817,32 @@ def bloque_11_vigilancia_epidemiologica():
     
     seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
 
-    # 2. CONEXIÓN DE BLOQUES (Asegúrate de que los nombres de tus funciones coincidan)
     if seleccion == "🏠 Dashboard":
-        bloque_0_dashboard() # Aquí verás la alerta de niños sin vacunas
-
+        bloque_0_dashboard()
     elif seleccion == "📝 1. Censo":
         if 'bloque_1_censo' in globals(): bloque_1_censo()
-        else: st.warning("Buscando función de Censo...")
-
+        else: st.warning("Función de Censo no encontrada.")
     elif seleccion == "🤰 2. Embarazadas":
         if 'bloque_2_materno' in globals(): bloque_2_materno()
-        else: st.warning("Buscando función de Embarazadas...")
-
     elif seleccion == "🏠 3. Viviendas":
-        # Si tienes una función específica para viviendas, pon su nombre aquí
         if 'bloque_3_viviendas' in globals(): bloque_3_viviendas()
-        else: st.info("Sección 3 (Viviendas) lista para conectar.")
-
     elif seleccion == "💉 4. Vacunación":
         if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
-        else: st.warning("Buscando función de Vacunación...")
-
     elif seleccion == "🍎 5. Nutrición":
         if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
-        else: st.info("Sección 5 (Nutrición) lista para conectar.")
-
     elif seleccion == "🦠 6. TBC":
         if 'bloque_5_tbc' in globals(): bloque_5_tbc()
-        else: st.info("Sección 6 (TBC) lista para conectar.")
-
     elif seleccion == "📊 7. Estadísticas":
         if 'bloque_10_stats' in globals(): bloque_10_stats()
-        else: st.info("Sección 7 (Estadísticas) lista para conectar.")
-
     elif seleccion == "👥 8. Seguimiento Agentes":
-        # Aquí iría tu lógica de supervisión
         if 'bloque_8_seguimiento' in globals(): bloque_8_seguimiento()
-        else: st.info("Sección 8 (Seguimiento) lista para conectar.")
-
     elif seleccion == "⚙️ 9. Admin":
-        bloque_9_admin() # Incluye el cambio de clave y manual del 07/01
-
+        bloque_9_admin()
     elif seleccion == "🚀 10. Gestión Avanzada":
         if 'bloque_10_gestion' in globals(): bloque_10_gestion()
-        else: st.info("Sección 10 (Gestión) lista para conectar.")
-
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
         if 'bloque_11_vigilancia' in globals(): bloque_11_vigilancia()
-        else: st.info("Sección 11 (Vigilancia) lista para conectar.")
 
+# ESTO DEBE ESTAR AL FINAL DE TODO Y PEGADO AL BORDE IZQUIERDO
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
