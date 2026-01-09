@@ -1926,58 +1926,35 @@ def bloque_11_vigilancia_epidemiologica():
         conn.close()
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
-# =================================================================
-# MOTOR DE NAVEGACIÓN (VERSIÓN DE RESCATE)
-# =================================================================
-def main():
-    try:
-        conectar_y_reparar()
-    except:
-        pass
-
-    st.sidebar.title("🏥 Gestión APS Orán")
-    
-    opciones = [
-        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
-    ]
-
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="menu_final_seguro")
-
-    # --- LÓGICA DE NAVEGACIÓN PROTEGIDA ---
+# ... dentro de main() ...
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
-    
     elif "1. Censo" in menu:
-        # Esto intenta llamar a la función solo si existe. Si no, te avisa.
-        if 'bloque_1_vivienda' in globals():
-            bloque_1_vivienda()
-        elif 'bloque_1_censo' in globals():
-            bloque_1_censo()
-        else:
-            st.warning("⚠️ Error: No encontré la función para el Censo. Revisa cómo se llama en tu código (ej: def bloque_1_xxx).")
-
+        bloque_1_vivienda()
+    elif "2. Materno" in menu:
+        bloque_2_materno()
+    elif "3. Vivienda" in menu:
+        bloque_3_vivienda()
+    elif "4. Vacunas" in menu:
+        bloque_4_vacunas()
+    elif "5. Nutrición" in menu:
+        bloque_5_nutricion()
+    elif "6. TBC" in menu:
+        bloque_6_tbc()
+    elif "7. Estadísticas" in menu:
+        bloque_7_estadisticas()
+    elif "8. Mapas" in menu:
+        bloque_8_mapas()
     elif "9. Admin" in menu:
-        # Cumpliendo instrucción del 07/01/2026
-        if 'bloque_9_configuracion' in globals():
-            bloque_9_configuracion()
-        else:
-            st.info("⚙️ Sección Admin: Aquí podrás cambiar tu contraseña pronto.")
-
+        bloque_9_configuracion()
+    elif "10. Gestión" in menu:
+        bloque_10_gestion_avanzada()
     elif "11. Vigilancia" in menu:
-        # Cumpliendo instrucción del 07/01/2026 (Alertas niños)
-        if 'bloque_11_vigilancia_alertas' in globals():
-            bloque_11_vigilancia_alertas()
-        else:
-            st.info("🚨 Alerta: Niños con vacunas pendientes. (Bloque 11 en desarrollo)")
-
-    else:
-        st.info(f"Has seleccionado {menu}. Esta sección se activará cuando la función correspondiente esté lista.")
+        bloque_11_vigilancia_alertas()
 
 if __name__ == "__main__":
     main()
+
 
 
 
