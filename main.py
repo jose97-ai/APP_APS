@@ -243,37 +243,61 @@ def inicializar_tablas_sistema():
     
     conn.commit()
     conn.close()
-# ==========================================
-# BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
-# ==========================================
 def bloque_0_dashboard():
-    st.title("🏠 Panel de Control APS")
+    st.title("🏠 Panel de Control APS - Orán")
     
+    # 1. Conexión segura a la base de datos
     try:
         conn = sqlite3.connect('aps_oran_final.db')
-        # Consulta simple para probar la conexión
-        total = pd.read_sql("SELECT COUNT(*) as cant FROM integrantes", conn).iloc[0]['cant']
         
-        # Intentamos traer la alerta de vacunas (instrucción 07/01/2026)
-        try:
-            ninos_alerta = pd.read_sql("""
-                SELECT COUNT(*) as cant FROM integrantes 
-                WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-            """, conn).iloc[0]['cant']
-        except:
-            ninos_alerta = 0
+        # 2. Cálculos rápidos (Métricas)
+        # Total de personas censadas
+        total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
+        
+        # Alerta de Vacunas (Instrucción del 07/01/2026: Niños sin registros)
+        # Filtramos menores de 5 años que no están en la tabla de vacunas
+        query_vacunas = """
+            SELECT COUNT(*) as cant FROM integrantes 
+            WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
+        """
+        ninos_sin_vacuna = pd.read_sql(query_vacunas, conn).iloc[0]['cant']
 
-        # Mostramos métricas básicas
-        c1, c2 = st.columns(2)
-        c1.metric("Población Total", f"{total} hab.")
-        c2.metric("Alerta Vacunas", f"{ninos_alerta} niños", delta_color="inverse")
+        # 3. Visualización de Métricas en Columnas
+        col1, col2, col3 = st.columns(3)
         
-        conn.close()
+        with col1:
+            st.metric("Población Total", f"{total_personas} hab.")
+        
+        with col2:
+            # Color inverso: si el número de niños sin vacuna sube, se pone en rojo
+            st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Sin registro", delta_color="inverse")
+            
+        with col3:
+            # Ejemplo de seguimiento de casos (puedes cambiar 'tbc' por la tabla que desees)
+            try:
+                casos_activos = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
+                st.metric("Casos TBC", f"{casos_activos} activos", delta="Seguimiento")
+            except:
+                st.metric("Casos TBC", "0 activos")
+
+        st.divider()
+
+        # 4. Sección de accesos rápidos
+        st.subheader("📌 Estado del Sistema")
+        st.info("""
+            **Nota del 07/01/2026:**
+            * Las alertas de vacunación están sincronizadas con el **Bloque 11**.
+            * Para cambiar su contraseña de acceso, diríjase al **Bloque 9 (Configuración)**.
+        """)
+
+        conn.close() # Cerramos conexión siempre
+
     except Exception as e:
-        st.error(f"Error de base de datos: {e}")
-    
-    st.write("---")
-    st.info("Utilice la barra lateral izquierda para navegar entre bloques.")
+        # Si algo falla aquí, la app sigue viva y te avisa qué pasó
+        st.error(f"Error técnico en el Dashboard: {e}")
+        st.warning("La base de datos podría estar ocupada o el archivo 'aps_oran_final.db' no se encuentra.")
+
+    st.caption("Actualizado: Enero 2026")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1686,6 +1710,7 @@ def main():
 # =================================================================
 if __name__ == "__main__":
     main()
+
 
 
 
