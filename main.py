@@ -1,29 +1,33 @@
+import streamlit as st
+
+# 1. ESTO DEBE SER LA PRIMERA LÍNEA DE CÓDIGO DE STREAMLIT
+st.set_page_config(page_title="APS Orán", layout="wide")
+
 def limpieza_total_interfaz():
     style = """
         <style>
-        /* Oculta el menú de hamburguesa (tres líneas) */
-        #MainMenu {visibility: hidden;}
-        
-        /* Oculta la barra superior (donde está GitHub y Deploy) */
+        /* Ocultar barra superior, menú y footer */
         header {visibility: hidden;}
-        
-        /* Oculta el pie de página */
+        #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-
-        /* Desactiva la interacción con elementos que activan atajos */
-        .stApp [data-testid="stToolbar"] {display: none;}
-        .stApp [data-testid="stDecoration"] {display: none;}
         
-        /* Bloquea el margen superior para que no se vea el espacio del header */
+        /* Eliminar botones de Deploy y GitHub */
+        .stAppDeployButton {display:none;}
+        [data-testid="bundle-version-info"] {display:none;}
+        [data-testid="stDecoration"] {display:none;}
+        
+        /* Pegar el contenido al borde superior */
         .block-container {
             padding-top: 0rem;
-            padding-bottom: 0rem;
         }
         </style>
     """
     st.markdown(style, unsafe_allow_html=True)
 
-# Ejecútalo al principio de tu main()
+# 2. Llamar a la limpieza
+limpieza_total_interfaz()
+
+# Luego sigue el resto de tu código (main, etc.)
 limpieza_total_interfaz()
 import streamlit as st
 
@@ -1622,6 +1626,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
