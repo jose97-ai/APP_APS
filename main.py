@@ -350,89 +350,64 @@ def inicializar_tablas_sistema():
 # ==========================================
 def bloque_0_dashboard():
     st.title("🏥 Panel de Control APS - Orán")
+    
+    # Aseguramos que las tablas existan antes de leer
+    inicializar_tablas_sistema() 
+    
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # 1. MÉTRICAS RÁPIDAS (Top Cards)
+    # 1. MÉTRICAS RÁPIDAS
     c1, c2, c3 = st.columns(3)
+    
+    # Usamos sub-try para que una métrica no rompa a las demás
     try:
-        total_personas = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        total_casas = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        ronda_v, _ = obtener_ronda_info() # Función que ya tenemos
-        
-        c1.metric("Población Censada", f"{total_personas} pers.")
-        c2.metric("Viviendas Relevadas", f"{total_casas}")
-        c3.metric("Ronda Actual", f"N° {ronda_v}")
-    except:
-        st.info("Iniciando sistema... Realice su primera carga para ver métricas.")
+        total_p = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        c1.metric("Población Censada", f"{total_p} pers.")
+    except: c1.metric("Población Censada", "0 pers.")
+
+    try:
+        total_c = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+        c2.metric("Viviendas Relevadas", f"{total_c}")
+    except: c2.metric("Viviendas Relevadas", "0")
+
+    ronda_v, _ = obtener_ronda_info()
+    c3.metric("Ronda Actual", f"N° {ronda_v}")
 
     st.divider()
 
-    # 2. SECCIÓN DE ALERTAS CRÍTICAS
+    # 2. SECCIÓN DE ALERTAS (Instrucción 07/01/2026)
     col_alerta1, col_alerta2 = st.columns(2)
 
     with col_alerta1:
         st.subheader("🚩 Viviendas en Riesgo")
-        # Buscamos casas con prioridad Alta o CRÍTICA
         try:
-            query_riesgo = """
-                SELECT nro_casa, prioridad, registrado_por 
-                FROM viviendas 
-                WHERE prioridad IN ('Alta', 'CRÍTICA')
-                ORDER BY prioridad DESC
-            """
-            df_riesgo = pd.read_sql(query_riesgo, conn)
-
+            df_riesgo = pd.read_sql("SELECT nro_casa, prioridad, registrado_por FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
             if not df_riesgo.empty:
                 for _, row in df_riesgo.iterrows():
-                    color = "red" if row['prioridad'] == 'CRÍTICA' else "orange"
-                    st.error(f"**Casa {row['nro_casa']}** - Prioridad: {row['prioridad']} (Agente: {row['registrado_por']})")
+                    st.error(f"**Casa {row['nro_casa']}** - {row['prioridad']}")
             else:
-                st.success("✅ No hay viviendas con riesgo crítico detectado.")
-        except:
-            st.info("Sin datos de viviendas aún.")
+                st.success("✅ Sin riesgo crítico.")
+        except: st.info("Sin datos de viviendas.")
 
     with col_alerta2:
-        st.subheader("👶 Alerta de Vacunación Infantil")
-        # Buscamos niños menores de 5 años sin vacunas registradas en la ronda actual
+        st.subheader("👶 Alerta de Vacunación")
         try:
-            # Calculamos fecha de corte para menores de 5 años
             fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-            
-            query_vacunas = f"""
-                SELECT i.dni, i.nombre, i.nro_casa
-                FROM integrantes i
-                LEFT JOIN vacunas v ON i.dni = v.dni
-                WHERE i.f_nac > '{fecha_limite}' 
-                AND v.dni IS NULL
+            # Esta es la alerta que pediste el 07/01
+            query_v = f"""
+                SELECT i.nombre, i.nro_casa FROM integrantes i 
+                LEFT JOIN vacunas v ON i.dni = v.dni 
+                WHERE i.f_nac > '{fecha_limite}' AND v.dni IS NULL
             """
-            df_niños_sin_v = pd.read_sql(query_vacunas, conn)
-
-            if not df_niños_sin_v.empty:
-                st.warning(f"Hay {len(df_niños_sin_v)} niños menores de 5 años sin vacunas cargadas.")
-                st.dataframe(df_niños_sin_v[['nro_casa', 'nombre']], use_container_width=True)
+            df_v = pd.read_sql(query_v, conn)
+            if not df_v.empty:
+                st.warning(f"⚠️ {len(df_v)} niños con vacunas pendientes")
+                st.dataframe(df_v, use_container_width=True)
             else:
-                st.success("✅ Todos los niños censados tienen vacunas al día.")
-        except:
-            st.info("Sin datos de vacunas aún.")
+                st.success("✅ Vacunas al día.")
+        except: st.info("Sin datos de vacunas.")
 
-    conn.close()
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
     conn.close()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
@@ -1879,6 +1854,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
