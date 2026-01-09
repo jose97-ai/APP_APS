@@ -1477,7 +1477,17 @@ def main():
         if 'bloque_2_materno' in globals(): globals()['bloque_2_materno']()
 
     elif seleccion == "🏠 3. Viviendas":
-        if 'bloque_3_viviendas' in globals(): globals()['bloque_3_viviendas']()
+        # Buscamos la función por todos los nombres que podrías haber usado
+        if 'bloque_3_viviendas' in globals(): 
+            globals()['bloque_3_viviendas']()
+        elif 'viviendas' in globals(): 
+            globals()['viviendas']()
+        elif 'bloque_viviendas' in globals(): 
+            globals()['bloque_viviendas']()
+        elif 'formulario_viviendas' in globals(): 
+            globals()['formulario_viviendas']()
+        else: 
+            st.error("⚠️ No se encontró la función de Viviendas. Revisa si en tu código dice 'def bloque_3_viviendas():' o algo similar.")
 
     elif seleccion == "💉 4. Vacunación":
         if 'bloque_4_vacunas' in globals(): globals()['bloque_4_vacunas']()
@@ -1524,4 +1534,5 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
