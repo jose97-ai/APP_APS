@@ -1662,9 +1662,13 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # FUNCIÓN PRINCIPAL (EL MOTOR DEL MENÚ)
 # ==========================================
+# --- FINAL DEL ARCHIVO ---
+
+# 1. Asegúrate de que esta función NO tenga errores de espacios
 def main():
-    # TEST DE VIDA: Si ves esto, el main() está funcionando
-    st.sidebar.success("✅ Sistema de Navegación Activo")
+    # Este comando fuerza la aparición de la barra lateral SI O SI
+    st.sidebar.title("🏥 Sistema APS Orán")
+    st.sidebar.write("---")
     
     opciones = [
         "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
@@ -1673,80 +1677,24 @@ def main():
         "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # Forzamos la barra lateral
-    with st.sidebar:
-        st.title("📌 Menú APS Orán")
-        menu = st.selectbox("Seleccione un Bloque:", opciones)
-        st.divider()
+    # Creamos el selector
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
 
-    # Lógica de salto (Asegúrate de que los nombres de las funciones existan arriba)
+    # Lógica de visualización
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     elif menu == "🛠️ 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
     elif menu == "🚨 11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
+    # Si falta conectar algún bloque, el sistema no se romperá:
     else:
-        st.info(f"Sección en desarrollo: {menu}")
+        st.info(f"Sección seleccionada: {menu}. Verifique que la función esté conectada en el código.")
 
-# ESTAS DOS LÍNEAS SON LAS MÁS IMPORTANTES DE TODO EL ARCHIVO
-# DEBEN ESTAR AL FINAL DE TODO Y SIN ESPACIOS A LA IZQUIERDA
+# 2. EL DISPARADOR (MUY IMPORTANTE)
+# Estas líneas deben estar pegadas al margen izquierdo, sin un solo espacio antes.
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
