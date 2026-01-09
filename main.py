@@ -1623,7 +1623,7 @@ def bloque_10_gestion_avanzada():
     except Exception as e:
         st.error(f"Error en el Bloque 10: {e}")
 # ==========================================
-# BLOQUE 10: ADMINISTRACION DE ALERTAS
+# BLOQUE 11: ADMINISTRACION DE ALERTAS
 # ==========================================
 def bloque_11_vigilancia_epidemiologica():
     st.title("🚨 Vigilancia Epidemiológica y Alertas")
@@ -1692,117 +1692,53 @@ def bloque_11_vigilancia_epidemiologica():
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
 def main():
-    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
-
-    if "auth" not in st.session_state: 
-        st.session_state["auth"] = False
-    if "nombre_agente" not in st.session_state: 
-        st.session_state["nombre_agente"] = "Usuario"
-
-    if not st.session_state["auth"]:
-        # --- PANTALLA DE LOGIN ---
-        st.markdown("<h1 style='text-align: center;'>🏥 SISTEMA APS - ORÁN</h1>", unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns([1,1.5,1])
-        with col2:
-            with st.form("login"):
-                u = st.text_input("ID de Usuario")
-                p = st.text_input("Contraseña", type="password")
-                if st.form_submit_button("🚀 Ingresar"):
-                    conn = obtener_conexion()
-                    # Modificamos la consulta para traer el NOMBRE real
-                    query = "SELECT nombre, rol FROM usuarios WHERE usuario=? AND password=?"
-                    res = pd.read_sql(query, conn, params=(u, hash_password(p)))
-                    conn.close()
-
-                    if not res.empty:
-                        st.session_state["auth"] = True
-                        st.session_state["usuario_logueado"] = u
-                        # GUARDAMOS EL NOMBRE REAL
-                        st.session_state["nombre_agente"] = res['nombre'].iloc[0]
-                        st.session_state["rol_usuario"] = res['rol'].iloc[0]
-                        st.rerun()
-                    elif u == "admin" and p == "oran2026":
-                        st.session_state["auth"] = True
-                        st.session_state["usuario_logueado"] = "admin"
-                        st.session_state["nombre_agente"] = "Administrador Central"
-                        st.session_state["rol_usuario"] = "Administrador"
-                        st.rerun()
-                    else:
-                        st.error("Credenciales incorrectas")
-    
-    else:
-        # --- BARRA LATERAL (SIDEBAR) ---
-        # 1. Mostrar NOMBRE REAL en lugar de ID
-        st.sidebar.title(f"👋 Bienvenido/a")
-        st.sidebar.subheader(st.session_state["nombre_agente"])
-        st.sidebar.caption(f"Rol: {st.session_state['rol_usuario']}")
-        st.sidebar.divider()
-
-        # 2. LISTA DE PRIORIDAD DE VISITA (Casas en Riesgo)
-        st.sidebar.subheader("🚨 Prioridades de Visita")
-        conn = obtener_conexion()
-        usuario = st.session_state["usuario_logueado"]
-        
-        # Buscamos personas en riesgo en el sector de este agente
-        query_prioridades = """
-            SELECT i.nombre, i.dni 
-            FROM integrantes i
-            LEFT JOIN controles_embarazo e ON i.dni = e.dni
-            LEFT JOIN tbc t ON i.dni = t.dni
-            LEFT JOIN crecimiento c ON i.dni = c.dni
-            WHERE i.registrado_por = ? AND (
-                t.estado = 'Activo' OR 
-                e.dni IS NOT NULL OR 
-                c.imc < 18.5
-            )
-            GROUP BY i.dni LIMIT 5
-        """
-        try:
-            prioridades = pd.read_sql(query_prioridades, conn, params=(usuario,))
-            if not prioridades.empty:
-                for idx, row in prioridades.iterrows():
-                    st.sidebar.warning(f"📍 **{row['nombre']}**\n(DNI: {row['dni']})")
-            else:
-                st.sidebar.success("✅ Sin visitas críticas pendientes.")
-        except:
-            st.sidebar.info("Cargue datos para ver prioridades.")
-        conn.close()
-
-        st.sidebar.divider()
-        
+    # Menú de Navegación con los nuevos bloques incluidos
     opciones = [
-            "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-            "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-            "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-            "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Epi"
-        ]
-        menu = st.sidebar.radio("Navegación:", opciones)
-        
-        if st.sidebar.button("🚪 Cerrar Sesión"):
-            st.session_state["auth"] = False
-            st.rerun()
+        "🏠 Panel de Control", 
+        "📝 1. Censo", 
+        "🤰 2. Materno", 
+        "🏠 3. Vivienda", 
+        "💉 4. Vacunas", 
+        "⚖️ 5. Nutrición", 
+        "💊 6. TBC", 
+        "📊 7. Estadísticas", 
+        "🗺️ 8. Mapas", 
+        "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada",
+        "🚨 11. Vigilancia Alertas"
+    ]
 
-        # --- RUTEADOR ---
-        if "Panel" in menu: bloque_0_dashboard()
-        elif "1. Censo" in menu: bloque_1_censo()
-        elif "2. Materno" in menu: bloque_2_materno()
-        elif "3. Vivienda" in menu: bloque_3_vivienda()
-        elif "4. Vacunas" in menu: bloque_4_vacunas()
-        elif "5. Nutrición" in menu: bloque_5_nutricion()
-        elif "6. TBC" in menu: bloque_6_tbc()
-        elif "7. Estadísticas" in menu: bloque_7_estadisticas()
-        elif "8. Mapas" in menu:
-            if st.session_state["rol_usuario"] in ["Supervisor", "Administrador"]:
-                bloque_8_seguimiento_agentes()
-            else:
-                bloque_8_analisis_agente()
-        elif "9. Admin" in menu: bloque_9_admin()
-        elif menu == "10. Gestión Avanzada":
-                bloque_10_gestion_avanzada()
-        elif menu == "11. Vigilancia Alertas":
-                bloque_11_vigilancia_epidemiologica()
+    # Barra lateral
+    st.sidebar.title("Navegación APS")
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
 
+    # Lógica de redirección (Asegúrate de que los nombres coincidan exactamente)
+    if menu == "🏠 Panel de Control":
+        bloque_0_dashboard()
+    elif menu == "📝 1. Censo":
+        bloque_1_vivienda() # O el nombre que uses para censo
+    elif menu == "🤰 2. Materno":
+        bloque_2_embarazo()
+    elif menu == "🏠 3. Vivienda":
+        bloque_3_vivienda()
+    elif menu == "💉 4. Vacunas":
+        bloque_4_vacunas()
+    elif menu == "⚖️ 5. Nutrición":
+        bloque_5_nutricion()
+    elif menu == "💊 6. TBC":
+        bloque_6_tbc()
+    elif menu == "📊 7. Estadísticas":
+        bloque_7_estadisticas()
+    elif menu == "🗺️ 8. Mapas":
+        bloque_8_seguimiento_agentes()
+    elif menu == "⚙️ 9. Admin":
+        bloque_9_configuracion()
+    elif menu == "🛠️ 10. Gestión Avanzada":
+        bloque_10_gestion_avanzada()
+    elif menu == "🚨 11. Vigilancia Alertas":
+        bloque_11_vigilancia_epidemiologica()
+
+# Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
 
