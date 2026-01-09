@@ -1033,115 +1033,93 @@ def bloque_8_supervisor(): bloque_8_analisis()
 def bloque_8_mapas(): bloque_8_analisis()
 def bloque_8_analisis_agente(): bloque_8_analisis()
 # ==========================================
-# BLOQUE 9: ADMINISTRACIÓN Y MANTENIMIENTO
+# BLOQUE 9: ADMINISTRACIÓN Y EQUIPOS
 # ==========================================
-def bloque_9_admin_total():
-    st.title("⚙️ Panel de Administración Central")
+def bloque_9_admin():
+    st.title("⚙️ Panel de Administración")
     
-    # Solo permitir acceso a Administradores
-    rol_actual = st.session_state.get('rol_usuario', '')
-    if rol_actual != "Administrador":
-        st.error("Acceso denegado. Se requieren permisos de Administrador.")
+    if st.session_state.get('rol_usuario') != "Administrador":
+        st.error("Acceso restringido a Administradores.")
         return
 
-    # Crear Pestañas para organizar las herramientas
-    tab_usuarios, tab_bajas, tab_mantenimiento = st.tabs([
-        "👤 Crear Usuarios", 
-        "🗑️ Gestionar Bajas", 
-        "🛠️ Modo Desarrollador"
+    # Añadimos la pestaña de "Equipos"
+    tab_crear, tab_equipos, tab_bajas, tab_dev = st.tabs([
+        "👤 Crear Usuario", 
+        "🤝 Asignar Equipos",
+        "🗑️ Bajas", 
+        "🛠️ Mantenimiento"
     ])
 
     conn = sqlite3.connect('aps_oran_final.db')
 
-    # --- PESTAÑA 1: CREAR USUARIOS ---
-    with tab_usuarios:
-        st.subheader("Registrar Nuevo Personal")
-        with st.form("form_nuevo_usuario"):
-            nuevo_user = st.text_input("Nombre de Usuario (Login):")
-            nuevo_pass = st.text_input("Contraseña:", type="password")
-            nombre_real = st.text_input("Nombre Completo:")
-            nuevo_rol = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"])
-            
-            # Si es agente, permitir asignarle un supervisor
-            supervisor_asignado = None
-            if nuevo_rol == "Agente Sanitario":
-                df_super = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)
-                supervisor_asignado = st.selectbox("Asignar Supervisor (Opcional):", ["Ninguno"] + df_super['usuario'].tolist())
+    # --- PESTAÑA 1: CREACIÓN ---
+    with tab_crear:
+        with st.form("nuevo_usuario"):
+            u = st.text_input("Usuario (Login):")
+            p = st.text_input("Password:", type="password")
+            n = st.text_input("Nombre Real:")
+            r = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"])
+            if st.form_submit_button("Guardar"):
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO usuarios (usuario, password, rol, nombre) VALUES (?,?,?,?)", (u,p,r,n))
+                conn.commit()
+                st.success("Usuario creado.")
 
-            if st.form_submit_button("Crear Usuario"):
-                if nuevo_user and nuevo_pass:
-                    try:
-                        cursor = conn.cursor()
-                        # Asegurar que existan las columnas nombre y supervisor_id
-                        cursor.execute("PRAGMA table_info(usuarios)")
-                        cols = [info[1] for info in cursor.fetchall()]
-                        if "nombre" not in cols: cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
-                        if "supervisor_id" not in cols: cursor.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
-                        
-                        sup_id = None if supervisor_asignado == "Ninguno" else supervisor_asignado
-                        
-                        cursor.execute("""INSERT INTO usuarios (usuario, password, rol, nombre, supervisor_id) 
-                                       VALUES (?, ?, ?, ?, ?)""", 
-                                       (nuevo_user, nuevo_pass, nuevo_rol, nombre_real, sup_id))
-                        conn.commit()
-                        st.success(f"Usuario {nuevo_user} creado con éxito.")
-                    except sqlite3.IntegrityError:
-                        st.error("El nombre de usuario ya existe.")
-                else:
-                    st.error("Usuario y contraseña son obligatorios.")
-
-    # --- PESTAÑA 2: BORRAR USUARIOS ---
-    with tab_bajas:
-        st.subheader("Eliminar Personal del Sistema")
-        df_u = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
-        st.dataframe(df_u, use_container_width=True)
+    # --- PESTAÑA 2: ASIGNAR AGENTES A SUPERVISORES (LO QUE BUSCABAS) ---
+    with tab_equipos:
+        st.subheader("Vincular Agentes con su Supervisor")
         
-        user_borrar = st.selectbox("Seleccione usuario a eliminar:", [""] + df_u['usuario'].tolist())
-        if user_borrar:
-            if user_borrar == st.session_state.get('usuario_logueado'):
-                st.warning("No puedes eliminarte a ti mismo mientras estás en sesión.")
-            else:
-                if st.button("CONFIRMAR ELIMINACIÓN PERMANENTE", type="primary"):
+        # Obtener listas
+        supervisores = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)['usuario'].tolist()
+        agentes = pd.read_sql("SELECT usuario, supervisor_id FROM usuarios WHERE rol='Agente Sanitario'", conn)
+        
+        if not supervisores:
+            st.warning("No hay supervisores registrados aún.")
+        else:
+            col_sup, col_age = st.columns(2)
+            with col_sup:
+                sup_sel = st.selectbox("1. Seleccione Supervisor:", supervisores)
+            with col_age:
+                # Mostrar solo agentes que NO tienen ese supervisor o no tienen ninguno
+                agentes_disp = agentes[agentes['supervisor_id'] != sup_sel]['usuario'].tolist()
+                age_sel = st.multiselect("2. Seleccione Agente(s) para este equipo:", agentes_disp)
+
+            if st.button("Confirmar Asignación de Equipo"):
+                if age_sel:
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (user_borrar,))
+                    for a in age_sel:
+                        cursor.execute("UPDATE usuarios SET supervisor_id = ? WHERE usuario = ?", (sup_sel, a))
                     conn.commit()
-                    st.success(f"Usuario {user_borrar} eliminado.")
+                    st.success(f"Se asignaron {len(age_sel)} agentes a {sup_sel}")
                     st.rerun()
 
-    # --- PESTAÑA 3: MODO DESARROLLADOR (EL BOTÓN QUE BUSCABAS) ---
-    with tab_mantenimiento:
-        st.subheader("🛠️ Herramientas de Mantenimiento")
-        st.error("¡Peligro! Estas acciones borran datos de salud y censo.")
-        
-        col_dev1, col_dev2 = st.columns(2)
-        
-        with col_dev1:
-            st.write("**Borrar por DNI**")
-            dni_test = st.text_input("DNI de prueba a eliminar:")
-            if st.button("Limpiar DNI de todas las tablas"):
-                if dni_test:
-                    cursor = conn.cursor()
-                    for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
-                        cursor.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_test,))
-                    conn.commit()
-                    st.success(f"DNI {dni_test} borrado.")
-        
-        with col_dev2:
-            st.write("**Reset de Fábrica**")
-            confirmar_reset = st.text_input("Escriba 'RESET' para borrar TODO el censo:")
-            if confirmar_reset == "RESET":
-                if st.button("BORRAR TODA LA BASE DE DATOS", type="primary"):
-                    cursor = conn.cursor()
-                    for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
-                        cursor.execute(f"DELETE FROM {t}")
-                    conn.commit()
-                    st.success("Base de datos de salud vaciada correctamente.")
+        st.divider()
+        st.write("**Mapa de Equipos Actual:**")
+        df_mapa = pd.read_sql("SELECT nombre as Agente, supervisor_id as Supervisor FROM usuarios WHERE rol='Agente Sanitario'", conn)
+        st.table(df_mapa)
+
+    # --- PESTAÑA 3: BAJAS ---
+    with tab_bajas:
+        df_all = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
+        user_del = st.selectbox("Usuario a eliminar:", [""] + df_all['usuario'].tolist())
+        if st.button("Eliminar permanentemente", type="primary") and user_del:
+            if user_del != st.session_state.get('usuario_logueado'):
+                conn.execute("DELETE FROM usuarios WHERE usuario = ?", (user_del,))
+                conn.commit()
+                st.success("Eliminado.")
+                st.rerun()
+
+    # --- PESTAÑA 4: MODO DESARROLLADOR ---
+    with tab_dev:
+        st.subheader("Limpieza de Pruebas")
+        dni_p = st.text_input("DNI de prueba:")
+        if st.button("Borrar DNI de todo el sistema"):
+            for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
+                conn.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_p,))
+            conn.commit()
+            st.success("Datos de prueba borrados.")
 
     conn.close()
-
-# --- PUENTE PARA EL MAIN ---
-def bloque_9_admin():
-    bloque_9_admin_total()
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
@@ -1255,6 +1233,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
