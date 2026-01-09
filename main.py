@@ -772,7 +772,39 @@ def bloque_7_estadistica():
             st.download_button("Descargar Archivo PDF", pdf_bytes, f"reporte_{usuario_actual}.pdf", "application/pdf")
 
     else:
-        st.warning(f"No hay registros cargados por el usuario {usuario_actual}.")
+        st.warning(f"No hay registros cargados por el usuario {usuario_actual}.")def bloque_7_estadistica():
+    st.header("📊 Bloque 7: Control Poblacional y Estadísticas")
+    
+    conn = obtener_conexion()
+    try:
+        # Consulta para traer los datos necesarios
+        query = "SELECT f_nac, sexo FROM integrantes"
+        df = pd.read_sql(query, conn)
+        
+        # Verificamos si hay datos antes de intentar graficar
+        if df.empty:
+            st.info("ℹ️ No hay datos cargados en el sistema. Registre integrantes en el Bloque 1 para ver las estadísticas.")
+        else:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Distribución por Sexo")
+                # Mantenemos el gráfico de torta que tenías
+                fig_sexo = px.pie(df, names='sexo', color='sexo',
+                                 color_discrete_map={'Masculino':'#1B5E20', 'Femenino':'#4CAF50', 'M':'#1B5E20', 'F':'#4CAF50'})
+                st.plotly_chart(fig_sexo, use_container_width=True)
+            
+            with col2:
+                st.subheader("Pirámide de Población (Conteos)")
+                # Mantenemos el gráfico de barras actual
+                st.bar_chart(df['sexo'].value_counts())
+                st.write("Resumen numérico:", df['sexo'].value_counts())
+
+    except Exception as e:
+        # En caso de que la tabla no exista o haya un error de base de datos
+        st.error("⚠️ La base de datos aún no está lista o la tabla 'integrantes' no tiene registros.")
+    finally:
+        conn.close()
 # ==========================================
 # BLOQUE 8: GRÁFICAS Y MAPAS (ANÁLISIS DE RIESGO)
 # ==========================================
@@ -1030,6 +1062,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
