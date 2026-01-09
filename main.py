@@ -444,27 +444,38 @@ def bloque_2_materno():
         finally:
             conn.close()
 # ==========================================
-# BLOQUE 3: VIVIENDA (VERSIÓN DETALLADA APS)
+# BLOQUE 3: VIVIENDA (CON TENENCIA Y REPARACIÓN)
 # ==========================================
 def bloque_3_vivienda():
     st.header("🏠 Relevamiento de Vivienda y Saneamiento")
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # 1. CREACIÓN/ACTUALIZACIÓN DE TABLA VIVIENDA
-    # Incluimos tipos de agua, prioridad y fecha de visita
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS viviendas (
-            nro_casa TEXT PRIMARY KEY,
-            tipo_techo TEXT,
-            tipo_piso TEXT,
-            fuente_agua TEXT,
-            baño_tipo TEXT,
-            prioridad TEXT,
-            registrado_por TEXT,
-            fecha_visita TEXT
-        )
-    """)
+    # 1. CREACIÓN Y REPARACIÓN AUTOMÁTICA DE LA TABLA
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
+    
+    # Lista de columnas necesarias incluyendo 'tenencia'
+    columnas_necesarias = {
+        "tipo_techo": "TEXT",
+        "tipo_piso": "TEXT",
+        "fuente_agua": "TEXT",
+        "baño_tipo": "TEXT",
+        "prioridad": "TEXT",
+        "tenencia": "TEXT", # Nueva columna
+        "registrado_por": "TEXT",
+        "fecha_visita": "TEXT"
+    }
+
+    # Revisamos cuáles faltan y las agregamos
+    cursor.execute("PRAGMA table_info(viviendas)")
+    columnas_actuales = [info[1] for info in cursor.fetchall()]
+
+    for col, tipo in columnas_necesarias.items():
+        if col not in columnas_actuales:
+            try:
+                cursor.execute(f"ALTER TABLE viviendas ADD COLUMN {col} {tipo}")
+            except:
+                pass
     conn.commit()
 
     # 2. SELECCIÓN DE CASA
@@ -478,8 +489,8 @@ def bloque_3_vivienda():
             st.success(f"✅ Familia de: {res[0]}")
             
             # 3. FORMULARIO DE CONDICIONES
-            with st.form("form_vivienda_aps"):
-                st.subheader("🛠️ Infraestructura y Riesgo")
+            with st.form("form_vivienda_aps_v3"):
+                st.subheader("🛠️ Infraestructura, Tenencia y Riesgo")
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -487,7 +498,6 @@ def bloque_3_vivienda():
                                        ["Chapa", "Losa/Material", "Madera", "Paja/Barro", "Fibrocemento"])
                     piso = st.selectbox("Material del Piso:", 
                                       ["Cemento", "Mosaico/Cerámico", "Tierra", "Ladrillo"])
-                    # Tipos de agua detallados
                     agua = st.selectbox("Fuente de Agua:", [
                         "Red pública (dentro de la vivienda)",
                         "Red pública (fuera de la vivienda)",
@@ -498,32 +508,39 @@ def bloque_3_vivienda():
                     ])
 
                 with col2:
+                    # NUEVO CAMPO: Tenencia de la casa
+                    tenencia = st.selectbox("Tenencia de la Vivienda:", [
+                        "Propia", 
+                        "Alquilada", 
+                        "Heredada", 
+                        "Dada por el Estado", 
+                        "Prestada",
+                        "Otro"
+                    ])
                     baño = st.selectbox("Tipo de Baño:", 
                                        ["Interior con descarga", "Letrina", "Pozo ciego", "Cámara Séptica", "Cielo Abierto"])
-                    # Campo de Prioridad
                     prioridad = st.select_slider("Grado de Prioridad / Riesgo:", 
                                                options=["Baja", "Media", "Alta", "CRÍTICA"])
                     fecha_v = st.date_input("Fecha de Visita:", value=date.today())
 
                 if st.form_submit_button("Guardar Datos de Vivienda"):
                     usuario = st.session_state.get('usuario_logueado', 'admin')
-                    
                     try:
                         cursor.execute("""
                             INSERT OR REPLACE INTO viviendas 
-                            (nro_casa, tipo_techo, tipo_piso, fuente_agua, baño_tipo, prioridad, registrado_por, fecha_visita)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (nro_casa_v, techo, piso, agua, baño, prioridad, usuario, fecha_v.isoformat()))
+                            (nro_casa, tipo_techo, tipo_piso, fuente_agua, baño_tipo, prioridad, tenencia, registrado_por, fecha_visita)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (nro_casa_v, techo, piso, agua, baño, prioridad, tenencia, usuario, fecha_v.isoformat()))
                         conn.commit()
-                        st.success(f"📌 Visita a Casa {nro_casa_v} guardada. Prioridad: {prioridad}")
+                        st.success(f"📌 Visita a Casa {nro_casa_v} guardada exitosamente.")
                     except Exception as e:
                         st.error(f"Error al guardar: {e}")
             
-            # Mostrar datos actuales si ya existen
-            cursor.execute("SELECT prioridad, fecha_visita FROM viviendas WHERE nro_casa = ?", (nro_casa_v,))
+            # Muestra de datos guardados
+            cursor.execute("SELECT prioridad, tenencia, fecha_visita FROM viviendas WHERE nro_casa = ?", (nro_casa_v,))
             check_data = cursor.fetchone()
             if check_data:
-                st.info(f"Última visita registrada: {check_data[1]} - Prioridad actual: {check_data[0]}")
+                st.info(f"Última visita: {check_data[2]} | Tenencia: {check_data[1]} | Prioridad: {check_data[0]}")
         
         else:
             st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo.")
@@ -1272,6 +1289,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
