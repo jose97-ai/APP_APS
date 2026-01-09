@@ -360,7 +360,7 @@ def obtener_conexion():
     """Crea la conexión a la base de datos local"""
     return sqlite3.connect('aps_oran_final.db')
 
-ddef inicializar_db():
+def inicializar_db():
     """Crea todas las tablas asegurando la estructura correcta para Orán"""
     conn = obtener_conexion()
     c = conn.cursor()
@@ -1953,6 +1953,7 @@ def bloque_11_vigilancia_epidemiologica():
 
 if __name__ == "__main__":
     main()
+
 
 
 
