@@ -1,3 +1,16 @@
+import sqlite3
+
+# Esta función es la que el Bloque 7 (y otros) está reclamando
+def conectar_y_reparar():
+    """Función de conexión exigida por los bloques originales"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    # Configuramos para que las consultas devuelvan diccionarios si es necesario
+    conn.row_factory = sqlite3.Row 
+    return conn
+
+# También definimos obtener_conexion por si otros bloques usan ese nombre
+def obtener_conexion():
+    return conectar_y_reparar()
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -1499,3 +1512,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
