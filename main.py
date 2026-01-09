@@ -957,86 +957,98 @@ def bloque_7_estadistica():
     else:
         st.warning(f"No hay registros cargados para la vista de {usuario_actual}.")
 # ==========================================
-# BLOQUE 8: VISTA ESTRATÉGICA (SUPERVISOR)
+# BLOQUE 8: VISTA ESTRATÉGICA (BLINDADO)
 # ==========================================
 def bloque_8_supervisor():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Supervisor')
-    ronda_act, _ = obtener_ronda_info()
+    ronda_act = "1" # O recuperar de tu función de rondas
     
-    st.header(f"🏛️ Panel de Control de Supervisión - Ronda {ronda_act}")
+    st.header(f"🏛️ Panel de Control de Supervisión")
     
     conn = obtener_conexion()
     
-    # 1. Obtener el equipo a cargo
-    equipo = obtener_equipo_agentes(usuario_actual)
-    placeholders = ', '.join(['?'] * len(equipo))
-    
-    # 2. Query Consolidada del Equipo
-    query = f"""
-    SELECT i.dni, i.registrado_por as agente, i.f_nac, i.latitud, i.longitud,
-           e.ronda as ronda_emb, 
-           c.imc, c.ronda as ronda_nut,
-           t.estado as tbc_est, t.ronda as ronda_tbc
-    FROM integrantes i
-    LEFT JOIN (SELECT dni, ronda FROM controles_embarazo) e ON i.dni = e.dni
-    LEFT JOIN (SELECT dni, imc, ronda FROM crecimiento GROUP BY dni HAVING MAX(fecha)) c ON i.dni = c.dni
-    LEFT JOIN (SELECT dni, estado, ronda FROM tbc GROUP BY dni HAVING MAX(fecha_muestra)) t ON i.dni = t.dni
-    WHERE i.registrado_por IN ({placeholders})
-    """
-    
-    df = pd.read_sql(query, conn, params=equipo)
-    conn.close()
+    # --- FUNCIÓN AUXILIAR PARA VALIDACIÓN ---
+    def tabla_existe(nombre_tabla):
+        c = conn.cursor()
+        c.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
+        return c.fetchone()[0] == 1
 
-    if df.empty:
-        st.warning("No hay datos cargados por los agentes de su equipo.")
-        return
+    try:
+        # 1. Obtener el equipo y validar que no esté vacío
+        equipo = obtener_equipo_agentes(usuario_actual)
+        if not equipo:
+            st.warning("⚠️ No tiene agentes asignados a su cargo. Contacte al Administrador.")
+            return
 
-    # --- MÉTRICAS GLOBALES DEL EQUIPO ---
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Población Total", len(df))
-    c2.metric("Embarazadas (Ronda)", len(df[df['ronda_emb'] == ronda_act]))
-    c3.metric("Casos TBC", len(df[df['tbc_est'].notnull()]))
-    c4.metric("Bajo Peso", len(df[df['imc'] < 18.5]))
-
-    # --- COMPARATIVA ENTRE AGENTES (ESTADÍSTICA DE DESEMPEÑO) ---
-    st.subheader("📊 Cobertura por Agente Sanitario")
-    st.caption("Cantidad de controles realizados en la ronda actual por cada integrante del equipo.")
-    
-    # Agrupamos por agente y contamos actividades en la ronda actual
-    df_actual = df[(df['ronda_emb'] == ronda_act) | (df['ronda_nut'] == ronda_act) | (df['ronda_tbc'] == ronda_act)]
-    desempeno = df_actual.groupby('agente').size().reset_index(name='Total Actividades')
-    
-    fig_agentes = px.bar(desempeno, x='agente', y='Total Actividades', 
-                        color='Total Actividades', 
-                        title=f"Actividades registradas en Ronda {ronda_act}",
-                        color_continuous_scale='Viridis')
-    st.plotly_chart(fig_agentes, use_container_width=True)
-
-    # --- MAPA DE CALOR EPIDEMIOLÓGICO ---
-    st.subheader("📍 Mapa de Riesgo por Agente")
-    
-    # Coloreamos por agente para ver qué zonas están cubiertas por quién
-    df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)]
-    
-    if not df_mapa.empty:
-        fig_mapa_sup = px.scatter_mapbox(
-            df_mapa, lat="latitud", lon="longitud", color="agente",
-            hover_name="agente", zoom=12, height=500,
-            mapbox_style="carto-positron",
-            title="Distribución Geográfica por Responsable de Sector"
-        )
-        st.plotly_chart(fig_mapa_sup, use_container_width=True)
-    
-    # --- ALERTAS DE CRÍTICOS (TABLA DE ACCIÓN) ---
-    st.divider()
-    st.subheader("🚨 Casos Críticos del Equipo")
-    with st.expander("Ver lista de pacientes con Bajo Peso o TBC Activo"):
-        criticos = df[(df['imc'] < 18.5) | (df['tbc_est'] == 'Activo')]
-        if not criticos.empty:
-            st.table(criticos[['dni', 'agente', 'imc', 'tbc_est']])
+        # 2. Construcción de la Query Dinámica según tablas existentes
+        # Empezamos con la tabla base que SIEMPRE existe
+        query_parts = ["SELECT i.dni, i.registrado_por as agente, i.f_nac, i.latitud, i.longitud"]
+        joins = []
+        
+        if tabla_existe('controles_embarazo'):
+            query_parts.append(", e.ronda as ronda_emb")
+            joins.append("LEFT JOIN controles_embarazo e ON i.dni = e.dni")
         else:
-            st.success("No se detectan casos críticos en el equipo actualmente.")
+            query_parts.append(", NULL as ronda_emb")
+
+        if tabla_existe('crecimiento'):
+            query_parts.append(", c.imc, c.ronda as ronda_nut")
+            joins.append("LEFT JOIN crecimiento c ON i.dni = c.dni")
+        else:
+            query_parts.append(", NULL as imc, NULL as ronda_nut")
+
+        if tabla_existe('tbc'):
+            query_parts.append(", t.estado as tbc_est, t.ronda as ronda_tbc")
+            joins.append("LEFT JOIN tbc t ON i.dni = t.dni")
+        else:
+            query_parts.append(", NULL as tbc_est, NULL as ronda_tbc")
+
+        # Unimos todo
+        placeholders = ', '.join(['?'] * len(equipo))
+        full_query = f"{' '.join(query_parts)} FROM integrantes i {' '.join(joins)} WHERE i.registrado_por IN ({placeholders})"
+        
+        df = pd.read_sql(full_query, conn, params=equipo)
+
+        if df.empty:
+            st.info("Los agentes de su equipo aún no han registrado datos en el sistema.")
+        else:
+            # --- VISUALIZACIÓN ---
+            st.subheader(f"📊 Resumen del Equipo - Ronda {ronda_act}")
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Población Total", len(df.drop_duplicates('dni')))
+            
+            # Conteo seguro de embarazadas
+            total_emb = len(df[df['ronda_emb'] == ronda_act]) if 'ronda_emb' in df.columns else 0
+            c2.metric("Embarazadas Ronda", total_emb)
+            
+            # Conteo seguro de bajo peso
+            total_nut = len(df[df['imc'] < 18.5]) if 'imc' in df.columns else 0
+            c3.metric("Casos Bajo Peso", total_nut)
+
+            st.divider()
+
+            # Gráfico de Desempeño por Agente
+            st.subheader("📈 Actividad por Agente")
+            desempeno = df.groupby('agente').size().reset_index(name='Registros')
+            fig_perf = px.bar(desempeno, x='agente', y='Registros', color='agente', title="Carga de datos por responsable")
+            st.plotly_chart(fig_perf, use_container_width=True)
+
+            # Mapa
+            st.subheader("📍 Distribución Geográfica del Equipo")
+            df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)].dropna(subset=['latitud', 'longitud'])
+            if not df_mapa.empty:
+                fig_map = px.scatter_mapbox(df_mapa, lat="latitud", lon="longitud", color="agente", 
+                                          zoom=12, mapbox_style="carto-positron", height=500)
+                st.plotly_chart(fig_map, use_container_width=True)
+            else:
+                st.info("No hay coordenadas GPS suficientes para mostrar el mapa.")
+
+    except Exception as e:
+        st.error(f"Error crítico en Bloque 8: {e}")
+    finally:
+        conn.close()
 # ==========================================
 # BLOQUE 9: ADMINISTRACIÓN, SEGURIDAD Y EQUIPOS
 # ==========================================
@@ -1264,5 +1276,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
