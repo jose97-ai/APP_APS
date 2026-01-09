@@ -1043,7 +1043,7 @@ def main():
         st.sidebar.write(f"Usuario: **{st.session_state['usuario_logueado']}**")
         
         menu = st.sidebar.radio("Navegación:", 
-            ["Dashboard", "1. Censo", "2. Materno", "3. Vivienda", "4. Vacunas", "5. Nutrición", "6. TBC", "7. Estadísticas", "8. Mapas", "9. Admin"])
+            ["Panel de Control", "1. Censo", "2. Materno", "3. Vivienda", "4. Vacunas", "5. Nutrición", "6. TBC", "7. Estadísticas", "8. Mapas", "9. Admin"])
         
         if st.sidebar.button("🚪 Cerrar Sesión"):
             st.session_state["auth"] = False
@@ -1063,6 +1063,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
