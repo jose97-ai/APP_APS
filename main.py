@@ -233,12 +233,6 @@ st.markdown("""
 def obtener_conexion():
     """Crea la conexión a la base de datos local"""
     return sqlite3.connect('aps_oran_final.db')
-
-def inicializar_db():
-    """Crea todas las tablas asegurando la estructura correcta para Orán"""
-    conn = obtener_conexion()
-    c = conn.cursor()
-    
     # 1. Crear tabla de Usuarios con nombres de columna explícitos
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
         usuario TEXT PRIMARY KEY, 
@@ -1824,9 +1818,9 @@ def bloque_11_vigilancia_epidemiologica():
         bloque_10_gestion_avanzada()
     elif "11. Vigilancia" in menu:
         bloque_11_vigilancia_alertas()
-
 if __name__ == "__main__":
     main()
+
 
 
 
