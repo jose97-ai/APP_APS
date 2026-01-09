@@ -1861,15 +1861,22 @@ def main():
         else:
             st.info("Configuración de Seguridad y Manual de Usuario")
 
-    elif seleccion == "🚀 10. Gestión Avanzada":
+   elif seleccion == "🚀 10. Gestión Avanzada":
+        # Busca cualquier función que pueda ser la 10
         if 'bloque_10_gestion' in globals(): bloque_10_gestion()
-        elif 'gestion' in globals(): gestion()
+        elif 'gestion_avanzada' in globals(): gestion_avanzada()
+        elif 'bloque_10' in globals(): bloque_10()
+        else: st.warning("⚠️ No se encontró la función del Bloque 10 en tus 2000 líneas.")
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
+        # Busca cualquier función que pueda ser la 11
         if 'bloque_11_vigilancia' in globals(): bloque_11_vigilancia()
         elif 'vigilancia' in globals(): vigilancia()
+        elif 'bloque_11' in globals(): bloque_11()
+        else: st.warning("⚠️ No se encontró la función del Bloque 11.")
 
 # Ejecución única
 if __name__ == "__main__":
     main()
+
 
