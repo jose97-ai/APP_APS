@@ -221,7 +221,7 @@ def bloque_0_dashboard():
     c2.metric("Ronda Actual", "1 (2026)")
     c3.metric("Estado", "Activo")
 # ==========================================
-# BLOQUE 1: CENSO (VERSIÓN AMPLIADA)
+# BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
 def bloque_1_censo():
     # 1. CONEXIÓN Y REPARACIÓN AUTOMÁTICA DE TABLAS
@@ -232,14 +232,15 @@ def bloque_1_censo():
         cursor.execute("PRAGMA table_info(integrantes)")
         columnas = [info[1] for info in cursor.fetchall()]
         
-        # Lista de columnas necesarias para esta versión
+        # Diccionario de columnas necesarias para esta versión
         nuevas_cols = {
             "ronda": "TEXT DEFAULT '1'",
             "registrado_por": "TEXT",
             "sexo": "TEXT",
             "nivel_educativo": "TEXT",
             "estado_educativo": "TEXT",
-            "obra_social": "TEXT"
+            "obra_social": "TEXT",
+            "nro_casa": "TEXT"  # Nueva columna para Casa/APS
         }
         
         for col, definicion in nuevas_cols.items():
@@ -261,22 +262,24 @@ def bloque_1_censo():
     st.header(f"📋 Censo - Ronda N° {ronda_activa}")
     st.caption(f"Agente: {usuario_actual}")
     
-    tab1, tab2 = st.tabs(["📝 Registrar Integrante", "🔍 Gestión de Mis Cargas"])
+    tab1, tab2 = st.tabs(["📝 Registrar Integrante", "🔍 Buscar por Casa / APS"])
 
+    # --- PESTAÑA 1: REGISTRO ---
     with tab1:
-        with st.form("form_censo_completo"):
-            st.subheader("Datos Personales y Sociales")
+        with st.form("form_censo_final"):
+            st.subheader("Datos de Vivienda y Personales")
             c1, c2 = st.columns(2)
             
             with c1:
+                nro_casa = st.text_input("Número de Casa / APS:") # Campo nuevo
                 dni = st.text_input("DNI (Sin puntos):")
                 nombre = st.text_input("Nombre y Apellido:")
                 f_nac = st.date_input("Fecha de Nacimiento:", min_value=date(1920, 1, 1))
                 sexo = st.selectbox("Sexo:", ["Masculino", "Femenino", "Otro"])
-                parentesco = st.selectbox("Parentesco con Jefe de Hogar:", 
-                                         ["Jefe/a", "Esposo/a", "Hijo/a", "Abuelo/a", "Nieto/a", "Hermano/a", "Otro"])
             
             with c2:
+                parentesco = st.selectbox("Parentesco con Jefe de Hogar:", 
+                                         ["Jefe/a", "Esposo/a", "Hijo/a", "Abuelo/a", "Nieto/a", "Hermano/a", "Otro"])
                 nivel_edu = st.selectbox("Nivel Educativo Máximo:", 
                                         ["Ninguno", "Primario", "Secundario", "Terciario", "Universitario"])
                 estado_edu = st.radio("Estado de Educación:", ["Completo", "Incompleto"], horizontal=True)
@@ -286,29 +289,48 @@ def bloque_1_censo():
                 lon = st.number_input("Longitud:", format="%.6f", value=-64.32)
 
             if st.form_submit_button("Guardar Registro"):
-                if dni and nombre:
+                if dni and nombre and nro_casa:
                     try:
                         cursor.execute("""
                             INSERT INTO integrantes (
                                 dni, nombre, f_nac, sexo, registrado_por, ronda, 
-                                nivel_educativo, estado_educativo, obra_social, latitud, longitud
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                nivel_educativo, estado_educativo, obra_social, nro_casa, latitud, longitud
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (dni, nombre, f_nac.isoformat(), sexo, usuario_actual, ronda_activa, 
-                              nivel_edu, estado_edu, obra_social, lat, lon))
+                              nivel_edu, estado_edu, obra_social, nro_casa, lat, lon))
                         conn.commit()
-                        st.success(f"✅ {nombre} guardado en Ronda {ronda_activa}")
+                        st.success(f"✅ {nombre} (Casa {nro_casa}) guardado en Ronda {ronda_activa}")
                     except sqlite3.IntegrityError:
                         st.error("❌ El DNI ya existe.")
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
                 else:
-                    st.warning("⚠️ Complete DNI y Nombre.")
+                    st.warning("⚠️ Complete DNI, Nombre y Número de Casa.")
 
+    # --- PESTAÑA 2: BÚSQUEDA POR CASA ---
     with tab2:
-        st.subheader("Registros en esta Ronda")
-        query = "SELECT dni, nombre, nivel_educativo, estado_educativo, obra_social FROM integrantes WHERE registrado_por = ? AND ronda = ?"
-        df = pd.read_sql(query, conn, params=(usuario_actual, ronda_activa))
-        st.dataframe(df, use_container_width=True)
+        st.subheader("🔍 Buscar Grupo Familiar")
+        casa_buscada = st.text_input("Ingrese el Número de Casa / APS a consultar:")
+        
+        if casa_buscada:
+            query_casa = """
+                SELECT dni, nombre, parentesco, nivel_educativo, obra_social 
+                FROM integrantes 
+                WHERE nro_casa = ? AND ronda = ?
+            """
+            df_familia = pd.read_sql(query_casa, conn, params=(casa_buscada, ronda_activa))
+            
+            if not df_familia.empty:
+                st.write(f"### Integrantes de la Casa N° {casa_buscada}:")
+                st.dataframe(df_familia, use_container_width=True)
+            else:
+                st.info(f"No se encontraron integrantes registrados en la casa {casa_buscada} para la ronda {ronda_activa}.")
+        
+        st.divider()
+        st.write("**Resumen de mis cargas recientes:**")
+        query_resumen = "SELECT nro_casa, dni, nombre FROM integrantes WHERE registrado_por = ? AND ronda = ? ORDER BY rowid DESC LIMIT 10"
+        df_reciente = pd.read_sql(query_resumen, conn, params=(usuario_actual, ronda_activa))
+        st.table(df_reciente)
 
     conn.close()
 # ==========================================
@@ -1250,6 +1272,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
