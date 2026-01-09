@@ -1798,14 +1798,14 @@ def main():
             else:
                 bloque_8_analisis_agente()
         elif "9. Admin" in menu: bloque_9_admin()
-       elif menu == "10. Gestión Avanzada":
+        elif menu == "10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
-        
-    elif menu == "11. Vigilancia Alertas":
+        elif menu == "11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
 
 if __name__ == "__main__":
     main()
+
 
 
 
