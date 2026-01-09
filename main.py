@@ -808,38 +808,34 @@ def bloque_6_tbc():
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: ESTADÍSTICAS OPERATIVAS (VERSIÓN FINAL)
+# BLOQUE 7: ESTADÍSTICAS OPERATIVAS (CORREGIDO)
 # ==========================================
 def bloque_7_estadistica():
+    # 1. Información de sesión
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
-    nombre_real = st.session_state.get('nombre_agente', 'Usuario')
     
     st.header("📊 Estadísticas del Sector")
-    st.caption(f"Análisis de datos para: {nombre_real}")
     
-    try:
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
+    # Abrimos la conexión
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
 
-        # --- 1. MANTENIMIENTO PREVENTIVO DE TABLAS ---
-        # Asegurar columna 'sexo' en integrantes
+    try:
+        # --- 2. MANTENIMIENTO PREVENTIVO (EVITA ERRORES DE COLUMNA) ---
         cursor.execute("PRAGMA table_info(integrantes)")
         cols_int = [info[1] for info in cursor.fetchall()]
         if "sexo" not in cols_int:
             cursor.execute("ALTER TABLE integrantes ADD COLUMN sexo TEXT DEFAULT 'No especificado'")
         
-        # Asegurar columna 'supervisor_id' en usuarios
         cursor.execute("PRAGMA table_info(usuarios)")
         cols_usr = [info[1] for info in cursor.fetchall()]
         if "supervisor_id" not in cols_usr:
             cursor.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
-        
         conn.commit()
 
-        # --- 2. LÓGICA DE FILTRADO POR ROL ---
+        # --- 3. FILTRADO SEGÚN ROL ---
         if rol_actual in ["Supervisor", "Administrador"]:
-            # Obtener equipo a cargo
             df_eq = pd.read_sql("SELECT usuario FROM usuarios WHERE supervisor_id=? OR usuario=?", 
                                 conn, params=(usuario_actual, usuario_actual))
             equipo = df_eq['usuario'].tolist() if not df_eq.empty else [usuario_actual]
@@ -850,30 +846,54 @@ def bloque_7_estadistica():
             filtro_sql = "WHERE registrado_por = ?"
             params = (usuario_actual,)
 
-        # --- 3. OBTENCIÓN DE DATOS POBLACIONALES ---
-        query_base = f"SELECT f_nac, sexo FROM integrantes {filtro_sql}"
-        df_integrantes = pd.read_sql(query_base, conn, params=params)
+        # --- 4. CARGA DE DATOS ---
+        df_integrantes = pd.read_sql(f"SELECT f_nac, sexo FROM integrantes {filtro_sql}", conn, params=params)
         
         if df_integrantes.empty:
-            st.warning("⚠️ No se encontraron integrantes registrados bajo su cargo.")
-            return
-
-        # --- 4. VISUALIZACIÓN DE GRÁFICOS ---
-        tab_pob, tab_prog = st.tabs(["👥 Demografía", "🌡️ Programas de Salud"])
-
-        with tab_pob:
-            col1, col2 = st.columns(2)
+            st.warning("⚠️ No hay datos registrados para mostrar estadísticas.")
+        else:
+            tab1, tab2 = st.tabs(["👥 Población", "🌡️ Salud"])
             
-            with col1:
-                st.write("**Distribución por Género**")
-                df_integrantes['sexo'] = df_integrantes['sexo'].fillna('No especificado')
-                fig_sexo = px.pie(df_integrantes, names='sexo', hole=0.4, 
-                                 color_discrete_sequence=px.colors.qualitative.Pastel)
-                st.plotly_chart(fig_sexo, use_container_width=True)
+            with tab1:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write("**Género**")
+                    fig_sexo = px.pie(df_integrantes, names='sexo', hole=0.4)
+                    st.plotly_chart(fig_sexo, use_container_width=True)
+                with c2:
+                    st.write("**Edades**")
+                    def calc_edad(f):
+                        try: return date.today().year - datetime.strptime(f, '%Y-%m-%d').year
+                        except: return 0
+                    df_integrantes['edad'] = df_integrantes['f_nac'].apply(calc_edad)
+                    fig_edad = px.histogram(df_integrantes, x='edad', nbins=15)
+                    st.plotly_chart(fig_edad, use_container_width=True)
 
-            with col2:
-                st.write("**Pirámide de Edad (Histograma)**")
-                # Cálculo de edad con valid
+            with tab2:
+                st.subheader("Indicadores Críticos")
+                m1, m2, m3 = st.columns(3)
+                
+                def conteo(tabla, extra=""):
+                    cursor.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{tabla}'")
+                    if cursor.fetchone()[0] == 1:
+                        res = pd.read_sql(f"SELECT count(*) as t FROM {tabla} {filtro_sql} {extra}", conn, params=params)
+                        return res['t'][0]
+                    return 0
+
+                m1.metric("TBC Activos", conteo('tbc', "AND estado='Activo'"))
+                m2.metric("Embarazadas", conteo('controles_embarazo'))
+                m3.metric("Bajo Peso", conteo('crecimiento', "AND imc < 18.5"))
+
+    except Exception as e:
+        st.error(f"Error en Bloque 7: {e}")
+    
+    finally:
+        # IMPORTANTE: El finally siempre cierra la conexión
+        conn.close()
+
+# --- PUENTE ---
+def bloque_7_estadisticas():
+    bloque_7_estadistica()
         
 import streamlit as st
 import pandas as pd
@@ -1239,6 +1259,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
