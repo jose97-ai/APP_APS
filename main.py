@@ -1,3 +1,20 @@
+import streamlit as st
+
+def ocultar_menu_github():
+    hide_github_style = """
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        /* Esto oculta específicamente el ícono de GitHub y el botón de Deploy */
+        .stAppDeployButton {display:none;}
+        [data-testid="bundle-version-info"] {display:none;}
+        </style>
+    """
+    st.markdown(hide_github_style, unsafe_allow_html=True)
+
+# Llama a la función al inicio de tu app
+ocultar_menu_github()
 def conectar_y_reparar():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -1578,6 +1595,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
