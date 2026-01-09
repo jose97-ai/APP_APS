@@ -120,97 +120,66 @@ def obtener_ronda_info():
     return ronda_manual, ronda_sugerida
 
 # ==========================================
-# 0. NÚCLEO, BASE DE DATOS Y LÓGICA
+# BLOQUE 0: DASHBOARD OPERATIVO (PANTALLA PRINCIPAL)
 # ==========================================
 def bloque_0_dashboard():
-    # 1. Gestión de Ronda
-    ronda_act, ronda_sug = obtener_ronda_info()
-    st.title(f"🏥 Panel de Control - Ronda N° {ronda_act}")
+    nombre_real = st.session_state.get('nombre_agente', 'Agente')
+    usuario_id = st.session_state.get('usuario_logueado', 'admin')
     
-    # 2. Identificación de Usuario y Rol
-    usuario = st.session_state.get('usuario_logueado', 'Agente')
-    rol = st.session_state.get('rol_usuario', 'Agente')
+    st.title(f"👋 ¡Buen día, {nombre_real}!")
+    st.write(f"Sector: Orán | Fecha: {date.today().strftime('%d/%m/%Y')}")
 
-    # --- LÓGICA DE FILTRADO POR ROL (Jerarquía) ---
+    # --- SECCIÓN DE ALERTAS CRÍTICAS (SOLO EN PANTALLA PRINCIPAL) ---
+    st.subheader("🚨 Prioridades de Visita Domiciliaria")
+    st.info("La siguiente lista muestra las personas que requieren atención urgente en su sector.")
+
     conn = obtener_conexion()
     
-    if rol == "Supervisor":
-        equipo = obtener_equipo_agentes(usuario)
-        placeholders = ', '.join(['?'] * len(equipo))
-        filtro_sql = f"IN ({placeholders})"
-        params = tuple(equipo)
-        st.info(f"📋 **Vista de Supervisor**: Datos del equipo bajo cargo de {usuario}.")
-    elif rol == "Administrador":
-        filtro_sql = "IS NOT NULL"
-        params = ()
-        st.info(f"🌐 **Vista Global**: Resumen general de todo el municipio.")
-        if ronda_act != ronda_sug:
-            st.warning(f"🔔 **Aviso Admin**: Por fecha calendario debería ser Ronda {ronda_sug}. Actualice en Bloque 9 si corresponde.")
+    # Query que cruza todos los riesgos (TBC, Embarazo, Nutrición y Vacunas)
+    query_alertas = """
+        SELECT i.nombre, i.dni, i.sector, 
+               CASE 
+                 WHEN t.estado = 'Activo' THEN '🔴 TBC Activo - Control DOTS'
+                 WHEN e.dni IS NOT NULL THEN '🟣 Embarazada - Control Prenatal'
+                 WHEN c.imc < 18.5 THEN '🟠 Bajo Peso - Riesgo Nutricional'
+                 WHEN v.estado = 'Incompleto' THEN '💉 Vacunación Pendiente'
+                 ELSE 'Control de Rutina'
+               END as motivo_riesgo
+        FROM integrantes i
+        LEFT JOIN tbc t ON i.dni = t.dni
+        LEFT JOIN controles_embarazo e ON i.dni = e.dni
+        LEFT JOIN crecimiento c ON i.dni = c.dni
+        LEFT JOIN vacunas v ON i.dni = v.dni
+        WHERE i.registrado_por = ? AND (
+            t.estado = 'Activo' OR 
+            e.dni IS NOT NULL OR 
+            c.imc < 18.5 OR 
+            v.estado = 'Incompleto'
+        )
+        GROUP BY i.dni
+    """
+    
+    df_alertas = pd.read_sql(query_alertas, conn, params=(usuario_id,))
+    conn.close()
+
+    if not df_alertas.empty:
+        # Mostramos las alertas en tarjetas (Cards) llamativas
+        cols = st.columns(2)
+        for idx, row in df_alertas.iterrows():
+            with cols[idx % 2]:
+                st.error(f"**Paciente:** {row['nombre']}  \n**Motivo:** {row['motivo_riesgo']}  \n**DNI:** {row['dni']}")
     else:
-        filtro_sql = "= ?"
-        params = (usuario,)
-        st.info(f"¡Buen día, **{usuario}**! Resumen de tu sector para hoy.")
-
-    # --- CONSULTAS A LA BASE DE DATOS (Manejo de errores integrado) ---
-    try:
-        # Familias totales según alcance
-        query_f = f"SELECT COUNT(DISTINCT familia) as total FROM integrantes WHERE registrado_por {filtro_sql}"
-        total_familias = pd.read_sql(query_f, conn, params=params).iloc[0]['total']
-        
-        # Niños con esquema incompleto (Menores de 6 años sin vacunas registradas)
-        query_v = f"""
-            SELECT COUNT(DISTINCT i.dni) as total 
-            FROM integrantes i
-            LEFT JOIN vacunas v ON i.dni = v.dni
-            WHERE i.registrado_por {filtro_sql} 
-            AND (strftime('%Y', 'now') - strftime('%Y', i.f_nac)) < 6
-            AND v.dni IS NULL
-        """
-        niños_riesgo = pd.read_sql(query_v, conn, params=params).iloc[0]['total']
-        
-        # Pacientes TBC en tratamiento activo
-        query_t = f"SELECT COUNT(*) as total FROM tbc WHERE registrado_por {filtro_sql} AND estado='Supervisada (DOTS)'"
-        tbc_activos = pd.read_sql(query_t, conn, params=params).iloc[0]['total']
-    except Exception as e:
-        total_familias, niños_riesgo, tbc_activos = 0, 0, 0
-    finally:
-        conn.close()
-
-    # --- INDICADORES VISUALES ---
-    c1, c2, c3 = st.columns(3)
-    
-    with c1:
-        st.metric(label="Familias Censadas", value=int(total_familias))
-    
-    with c2:
-        if niños_riesgo > 0:
-            st.warning(f"⚠️ {niños_riesgo} Niños con vacunas pendientes")
-        else:
-            st.success("✅ Esquemas de vacunación al día")
-            
-    with c3:
-        if tbc_activos > 0:
-            st.error(f"🚨 {tbc_activos} Tratamientos TBC en curso")
-        else:
-            st.info("Sin pacientes TBC activos")
+        st.success("✅ No tienes visitas críticas pendientes para hoy. ¡Buen trabajo!")
 
     st.divider()
 
-    # --- ACCIONES Y MANUAL ---
-    col_a, col_b = st.columns(2)
-    
-    with col_a:
-        st.subheader("🚀 Navegación Rápida")
-        if st.button("📝 Ir a Censo"):
-            st.switch_page("main.py") # O la lógica de menú que uses
-            
-    with col_b:
-        with st.expander("📌 Recordatorio del Manual"):
-            st.markdown(f"""
-            * **Ronda Actual:** {ronda_act} (Ciclo de 3 meses).
-            * **Contraseña:** Si la olvidaste, contacta al Administrador.
-            * **Seguridad:** No compartas tu usuario con otros agentes.
-            """)
+    # --- RESUMEN DE ESTADÍSTICAS RÁPIDAS ---
+    st.subheader("📊 Resumen del Sector")
+    # Aquí puedes añadir los indicadores que ya teníamos (Total familias, etc.)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Casos TBC", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('TBC')]))
+    col2.metric("Embarazadas", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('Embarazada')]))
+    col3.metric("Riesgo Nutricional", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('Bajo Peso')]))
 # ==========================================
 # BLOQUE 1: CENSO (ACTUALIZADO CON RONDA)
 # ==========================================
@@ -1266,3 +1235,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
