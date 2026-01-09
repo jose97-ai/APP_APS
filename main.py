@@ -1235,7 +1235,112 @@ def inicializar_tablas_sistema():
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     
     conn.commit()
-    conn.close()
+    conn.close()import streamlit as st
+import pandas as pd
+import sqlite3
+from datetime import datetime
+
+def bloque_8_seguimiento_agentes():
+    st.title("📍 Seguimiento de Actividades y Salud")
+    st.markdown("---")
+
+    try:
+        # 1. CONEXIÓN Y REPARACIÓN (Para evitar errores de columnas faltantes como latitud)
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
+        
+        # Aseguramos que existan las columnas de ubicación y sexo para que la consulta no falle
+        for col, tipo in [("latitud", "REAL"), ("longitud", "REAL"), ("sexo", "TEXT")]:
+            try:
+                cursor.execute(f"ALTER TABLE integrantes ADD COLUMN {col} {tipo}")
+            except:
+                pass
+        conn.commit()
+
+        # 2. OBTENER LISTA DE AGENTES PARA FILTRAR
+        # Buscamos a todos los que han registrado integrantes
+        agentes_query = "SELECT DISTINCT registrado_por FROM integrantes WHERE registrado_por IS NOT NULL"
+        lista_agentes = [row[0] for row in cursor.execute(agentes_query).fetchall()]
+        
+        if not lista_agentes:
+            st.warning("⚠️ No hay datos cargados por ningún agente todavía.")
+            conn.close()
+            return
+
+        # Sidebar o selector para filtrar agentes
+        agente_sel = st.multiselect("Filtrar por Agente(s):", lista_agentes, default=lista_agentes)
+
+        if not agente_sel:
+            st.info("Seleccione al menos un agente para ver la planilla.")
+            conn.close()
+            return
+
+        # 3. CONSULTA SQL ROBUSTA (LEFT JOIN para unir salud y censo)
+        # i = integrantes, e = embarazo, c = crecimiento, t = tbc
+        query = f"""
+            SELECT 
+                i.dni as DNI, 
+                i.nombre as Nombre, 
+                i.f_nac as Nacimiento, 
+                i.sexo as Sexo,
+                i.registrado_por as Agente,
+                e.ronda as Ronda_Emb, 
+                c.imc as IMC_Nutricion, 
+                c.ronda as Ronda_Nut, 
+                t.estado as Estado_TBC, 
+                t.ronda as Ronda_TBC
+            FROM integrantes i
+            LEFT JOIN (SELECT dni, ronda FROM controles_embarazo) e ON i.dni = e.dni
+            LEFT JOIN (SELECT dni, imc, ronda FROM crecimiento) c ON i.dni = c.dni
+            LEFT JOIN (SELECT dni, estado, ronda FROM tbc) t ON i.dni = t.dni
+            WHERE i.registrado_por IN ({','.join(['?']*len(agente_sel))})
+        """
+
+        df = pd.read_sql(query, conn, params=agente_sel)
+        conn.close()
+
+        if df.empty:
+            st.info("No se encontraron registros para los filtros seleccionados.")
+        else:
+            # 4. INTERFAZ DE USUARIO Y BUSCADOR
+            col_a, col_b = st.columns([2, 1])
+            with col_a:
+                busqueda = st.text_input("🔍 Buscar por Nombre o DNI:")
+            with col_b:
+                st.write(f"**Total registros:** {len(df)}")
+
+            if busqueda:
+                df = df[df['Nombre'].str.contains(busqueda, case=False, na=False) | 
+                        df['DNI'].astype(str).str.contains(busqueda)]
+
+            # Mostramos la tabla principal
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # 5. ALERTAS DE SALUD (Basado en tus requerimientos de control)
+            st.subheader("⚠️ Alertas de Salud Detectadas")
+            
+            # Filtramos casos de riesgo (Ejemplo: TBC positivo o IMC bajo)
+            casos_riesgo = df[(df['Estado_TBC'] == 'Positivo') | (df['IMC_Nutricion'] < 18.5)]
+            
+            if not casos_riesgo.empty:
+                st.error(f"Se han detectado {len(casos_riesgo)} casos con indicadores de riesgo.")
+                st.dataframe(casos_riesgo[['DNI', 'Nombre', 'Agente', 'Estado_TBC', 'IMC_Nutricion']], hide_index=True)
+            else:
+                st.success("✅ No se detectan alertas críticas en los agentes seleccionados.")
+
+            # 6. BOTÓN DE DESCARGA
+            st.divider()
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Descargar Planilla Consolidada (CSV)",
+                data=csv,
+                file_name=f"seguimiento_agentes_{datetime.now().strftime('%d_%m_%Y')}.csv",
+                mime="text/csv",
+            )
+
+    except Exception as e:
+        st.error(f"❌ Error al acceder a la base de datos: {e}")
+        st.info("Sugerencia: Revisa que las tablas de 'controles_embarazo' o 'tbc' hayan sido creadas.")
 # ==========================================
 # BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS
 # ==========================================
@@ -1478,6 +1583,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
