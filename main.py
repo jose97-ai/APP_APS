@@ -11,7 +11,7 @@ def conectar_y_reparar():
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
 
     # 2. Función interna para agregar columnas faltantes
-    def agregar_col(tabla, columna, tipo):
+def agregar_col(tabla, columna, tipo):
         cursor.execute(f"PRAGMA table_info({tabla})")
         columnas = [info[1] for info in cursor.fetchall()]
         if columna not in columnas:
@@ -32,6 +32,37 @@ def conectar_y_reparar():
 
     conn.commit()
     return conn
+def conexion_segura():
+    try:
+        # Intentamos conectar con un timeout de 10 segundos para evitar bloqueos
+        conn = sqlite3.connect('aps_oran_final.db', timeout=10)
+        return conn
+    except sqlite3.OperationalError:
+        st.error("⚠️ La base de datos está bloqueada por otro proceso. Intenta refrescar (F5).")
+        return None
+
+def inicializar_todo():
+    conn = conexion_segura()
+    if conn:
+        cursor = conn.cursor()
+        # Creamos las tablas necesarias paso a paso
+        tablas = {
+            "usuarios": "usuario TEXT PRIMARY KEY, password TEXT, rol TEXT",
+            "integrantes": "dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT",
+            "viviendas": "nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT",
+            "vacunas": "dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT",
+            "asignaciones": "supervisor TEXT, agente TEXT",
+            "config": "clave TEXT PRIMARY KEY, valor TEXT"
+        }
+        
+        for nombre, campos in tablas.items():
+            cursor.execute(f"CREATE TABLE IF NOT EXISTS {nombre} ({campos})")
+        
+        # Usuario admin inicial
+        cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin123', 'admin')")
+        
+        conn.commit()
+        conn.close()
 def inicializar_base_de_datos():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -1554,6 +1585,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
