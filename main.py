@@ -1798,6 +1798,9 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # NAVEGACION
 # ==========================================
+# Esto crea un "puente" para que cuando el código busque 'conectar_y_reparar', use la función nueva
+def conectar_y_reparar():
+    return sqlite3.connect('aps_oran_final.db')
 def main():
     inicializar_db()  # Asegura que las tablas y las alertas del 07/01 existan
     
@@ -1876,6 +1879,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
