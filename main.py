@@ -1346,33 +1346,27 @@ def bloque_8_seguimiento_agentes():
 # BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS
 # ==========================================
 def bloque_9_admin():
-    # 1. VERIFICACIÓN DE SEGURIDAD (Evita pantalla en blanco si no hay sesión)
-    if 'usuario_logueado' not in st.session_state:
-        st.warning("⚠️ Sesión no iniciada.")
-        return
-    
-    if st.session_state.usuario_logueado != 'admin':
-        st.error("🚫 Acceso denegado. Se requieren permisos de administrador.")
+    if st.session_state.get('usuario_logueado') != 'admin':
+        st.error("🚫 Acceso denegado.")
         return
 
-    st.title("⚙️ Gestión Superior APS - Orán")
+    st.title("⚙️ Gestión Superior APS")
     
-    # 2. CONEXIÓN Y ASEGURAR TABLAS (Para que no falle si la DB está vacía)
+    # Conexión robusta
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-    
-    # Creamos tablas si no existen para evitar errores de "Table not found"
+
+    # ASEGURAR TABLAS (Si no existen, el bloque se ve en blanco)
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, usuario TEXT, accion TEXT, detalles TEXT)")
     conn.commit()
 
-    # 3. PESTAÑAS
     tab_usuarios, tab_jerarquia, tab_rondas, tab_limpieza = st.tabs([
         "👥 Usuarios", "🏗️ Asignar Agentes", "🔄 Rondas", "🚨 Sistema"
     ])
 
-    # --- PESTAÑA 1: GESTIÓN DE USUARIOS (Con función de clave guardada) ---
+    # --- PESTAÑA 1: USUARIOS ---
     with tab_usuarios:
         st.subheader("Control de Cuentas")
         df_u = pd.read_sql("SELECT usuario, rol FROM usuarios", conn)
@@ -1380,69 +1374,87 @@ def bloque_9_admin():
         
         col_del, col_pass = st.columns(2)
         with col_del:
-            u_borrar = st.selectbox("Eliminar Usuario:", [""] + df_u['usuario'].tolist(), key="sb_borrar")
+            u_borrar = st.selectbox("Eliminar Usuario:", [""] + df_u['usuario'].tolist(), key="sb_del")
             if st.button("Confirmar Eliminación") and u_borrar:
                 if u_borrar != 'admin':
                     cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (u_borrar,))
-                    cursor.execute("DELETE FROM asignaciones WHERE supervisor = ? OR agente = ?", (u_borrar, u_borrar))
-                    cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (datetime('now'), ?, 'ELIMINAR', ?)", (st.session_state.usuario_logueado, u_borrar))
                     conn.commit()
-                    st.success(f"Usuario {u_borrar} eliminado.")
+                    st.success("Usuario eliminado.")
                     st.rerun()
 
-        with col_pass:
-            u_pass = st.selectbox("Cambiar Clave de:", [""] + df_u['usuario'].tolist(), key="sb_pass")
-            nueva_p = st.text_input("Nueva Clave:", type="password")
-            if st.button("Guardar Clave") and u_pass and nueva_p:
-                cursor.execute("UPDATE usuarios SET password = ? WHERE usuario = ?", (nueva_p, u_pass))
-                cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (datetime('now'), ?, 'PASSWORD', ?)", (st.session_state.usuario_logueado, u_pass))
-                conn.commit()
-                st.success("Contraseña actualizada.")
-
-    # --- PESTAÑA 2: ASIGNAR / EDITAR GRUPOS (NUEVA FUNCIÓN) ---
+    # --- PESTAÑA 2: ASIGNAR Y EDITAR (Aquí se ve la lista y la edición) ---
     with tab_jerarquia:
-        st.subheader("🏗️ Editar Grupos de Trabajo")
+        st.subheader("🏗️ Edición de Grupos de Trabajo")
         
-        # Obtenemos supervisores y agentes de la tabla usuarios
-        sups = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='supervisor'").fetchall()]
-        agentes_db = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='agente'").fetchall()]
+        # Cargar listas
+        supervisores = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='supervisor'").fetchall()]
+        agentes_todos = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='agente'").fetchall()]
 
-        if not sups:
-            st.info("No hay supervisores creados.")
+        if not supervisores:
+            st.warning("No se encontraron usuarios con el rol de 'supervisor'.")
         else:
-            sup_sel = st.selectbox("Seleccione el Supervisor para editar su grupo:", sups)
+            # 1. Elegir supervisor
+            sup_sel = st.selectbox("Seleccione Supervisor para gestionar:", supervisores, key="sel_sup_edit")
             
-            # BUSCAMOS ASIGNACIONES ACTUALES PARA EDITAR
-            actuales = [r[0] for r in cursor.execute("SELECT agente FROM asignaciones WHERE supervisor=?", (sup_sel,)).fetchall()]
-            
-            # El multiselect carga los que ya tiene (default=actuales)
-            age_sel = st.multiselect("Agentes bajo su mando:", options=agentes_db, default=actuales, key=f"edit_{sup_sel}")
+            # 2. Obtener agentes que YA tiene asignados
+            cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (sup_sel,))
+            asignados_actualmente = [r[0] for r in cursor.fetchall()]
 
-            if st.button("💾 Guardar Cambios en el Grupo"):
-                # Borramos lo viejo e insertamos lo nuevo (Editar)
+            # 3. Multiselect para EDITAR (Carga los actuales por defecto)
+            age_sel = st.multiselect(
+                f"Editar agentes a cargo de {sup_sel}:",
+                options=agentes_todos,
+                default=asignados_actualmente,
+                key=f"ms_edit_{sup_sel}"
+            )
+
+            if st.button("💾 Guardar Cambios en Grupo"):
                 cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (sup_sel,))
                 for a in age_sel:
                     cursor.execute("INSERT INTO asignaciones (supervisor, agente) VALUES (?, ?)", (sup_sel, a))
-                
-                cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (datetime('now'), ?, 'EDITAR_GRUPO', ?)", (st.session_state.usuario_logueado, f"Grupo de {sup_sel} actualizado"))
                 conn.commit()
-                st.success("Grupo actualizado correctamente.")
+                st.success("Grupo actualizado con éxito.")
                 st.rerun()
 
-    # --- PESTAÑA 4: SISTEMA (AUDITORÍA Y BACKUP) ---
-    with tab_limpieza:
-        st.subheader("🛡️ Auditoría y Backup")
+            # 4. Ver lista completa de quién está con quién
+            st.write("---")
+            st.markdown("### 📋 Mapa Actual de Supervisión")
+            df_mapa = pd.read_sql("SELECT supervisor as 'Supervisor', agente as 'Agente' FROM asignaciones", conn)
+            if not df_mapa.empty:
+                st.dataframe(df_mapa, use_container_width=True)
+            else:
+                st.info("No hay agentes asignados todavía.")
+
+    # --- PESTAÑA 3: RONDAS (Corregida para que se vea siempre) ---
+    with tab_rondas:
+        st.subheader("Control de Ronda Epidemiológica")
+        # Forzar valor si la tabla config está vacía
+        res_ronda = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        r_val = int(res_ronda[0]) if res_ronda else 1
         
-        # Botón de Backup (Función recomendada)
+        st.info(f"Ronda actual en el sistema: **{r_val}**")
+        nueva_r = st.number_input("Establecer nueva ronda:", min_value=1, value=r_val)
+        
+        if st.button("Actualizar Número de Ronda"):
+            cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (str(nueva_r),))
+            conn.commit()
+            st.success(f"Ronda actualizada a {nueva_r}")
+            st.rerun()
+
+    # --- PESTAÑA 4: SISTEMA (Backup y Auditoría) ---
+    with tab_limpieza:
+        st.subheader("🛡️ Seguridad")
+        # Botón de Backup
         try:
             with open('aps_oran_final.db', 'rb') as f:
-                st.download_button(label="📥 Descargar Base de Datos (Backup)", data=f, file_name="backup_aps.db")
+                st.download_button("📥 Descargar Backup de Base de Datos", f, "respaldo_aps.db")
         except:
-            st.error("No se pudo acceder al archivo de base de datos.")
+            st.error("Error al generar backup.")
 
+        # Auditoría
         st.write("---")
-        st.markdown("### 📋 Registro de Acciones (Auditoría)")
-        df_audit = pd.read_sql("SELECT fecha, usuario, accion, detalles FROM auditoria ORDER BY id DESC LIMIT 15", conn)
+        st.markdown("### 📜 Log de Auditoría")
+        df_audit = pd.read_sql("SELECT fecha, usuario, accion, detalles FROM auditoria ORDER BY id DESC LIMIT 10", conn)
         st.table(df_audit)
 
     conn.close()
@@ -1559,6 +1571,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
