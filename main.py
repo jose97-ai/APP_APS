@@ -1353,89 +1353,83 @@ def bloque_9_admin():
         st.error("🚫 Acceso denegado.")
         return
 
-    st.title("⚙️ Gestión Superior APS")
+    st.title("⚙️ Gestión Superior APS - Orán")
     
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-
-    # Aseguramos tablas
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
-    conn.commit()
 
     tab_u, tab_g, tab_r, tab_s = st.tabs(["👥 Usuarios", "🏗️ Asignar Grupo", "🔄 Rondas", "🚨 Sistema"])
 
     with tab_u:
         st.subheader("Control de Usuarios")
-        # Leemos todos los usuarios para ver qué hay
         df_usuarios = pd.read_sql("SELECT usuario, rol FROM usuarios", conn)
+        st.dataframe(df_usuarios, use_container_width=True)
         
-        if df_usuarios.empty:
-            st.error("La tabla de usuarios está vacía.")
-            # Botón para crear usuarios rápidamente si se borraron
-            if st.button("🆕 Crear jm.ramirez y agentes de prueba"):
-                cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('jm.ramirez', '1234', 'supervisor')")
-                cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('agente1', '1234', 'agente')")
-                cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('agente2', '1234', 'agente')")
-                conn.commit()
-                st.rerun()
-        else:
-            st.dataframe(df_usuarios, use_container_width=True)
-            st.info("💡 Asegúrate de que en la columna 'rol' diga exactamente 'supervisor' o 'agente' (en minúsculas).")
+        # Función para cambiar clave (de tu manual)
+        st.write("---")
+        u_sel = st.selectbox("Cambiar Clave de:", [""] + df_usuarios['usuario'].tolist())
+        nueva_p = st.text_input("Nueva Contraseña:", type="password")
+        if st.button("Actualizar Clave") and u_sel and nueva_p:
+            cursor.execute("UPDATE usuarios SET password = ? WHERE usuario = ?", (nueva_p, u_sel))
+            conn.commit()
+            st.success(f"Contraseña de {u_sel} actualizada.")
 
     with tab_g:
         st.subheader("🏗️ Gestión de Grupos")
         
-        # --- DIAGNÓSTICO EN VIVO ---
-        # Buscamos ignorando mayúsculas y espacios
-        todos = cursor.execute("SELECT usuario, rol FROM usuarios").fetchall()
+        # --- FILTRO AJUSTADO A TUS DATOS REALES ---
+        # Buscamos por los nombres exactos que mostraste en el log
+        query_todos = cursor.execute("SELECT usuario, rol FROM usuarios").fetchall()
         
-        # Filtramos manualmente para asegurar que funcione
-        supervisores = [u[0] for u in todos if str(u[1]).strip().lower() == 'supervisor']
-        agentes = [u[0] for u in todos if str(u[1]).strip().lower() == 'agente']
-
-        # Mostramos qué encontró el sistema para que tú lo veas
-        col1, col2 = st.columns(2)
-        col1.write(f"Supervisores detectados: `{len(supervisores)}`")
-        col2.write(f"Agentes detectados: `{len(agentes)}`")
+        # Reconocemos "Supervisor" y "Agente Sanitario" tal cual están en tu DB
+        supervisores = [u[0] for u in query_todos if "supervisor" in str(u[1]).lower()]
+        agentes = [u[0] for u in query_todos if "agente" in str(u[1]).lower()]
 
         if not supervisores or not agentes:
-            st.error("❌ No se pueden gestionar grupos aún.")
-            st.warning(f"El sistema encontró {len(supervisores)} supervisores y {len(agentes)} agentes. Se necesita al menos 1 de cada uno.")
-            
-            # Ayuda visual
-            with st.expander("🔍 Ver por qué no los reconoce"):
-                st.write("Datos crudos en la tabla Usuarios:")
-                st.write(todos)
+            st.error(f"❌ Error de roles. Detectados: {len(supervisores)} Supervisores y {len(agentes)} Agentes.")
+            st.info("Asegúrese de que los roles contengan la palabra 'Supervisor' o 'Agente'.")
         else:
-            sup_sel = st.selectbox("Elegir Supervisor:", supervisores, key="sup_sel_final")
+            sup_sel = st.selectbox("Seleccione Supervisor (ej: jm.ramirez):", supervisores, key="sup_final_fix")
             
-            # Cargar actuales
+            # Cargar agentes ya asignados a este supervisor
             cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (sup_sel,))
             actuales = [r[0] for r in cursor.fetchall()]
 
-            # Multiselect
-            seleccion = st.multiselect("Asignar Agentes:", options=agentes, default=actuales, key=f"ms_{sup_sel}")
+            # Multiselect para Editar el grupo
+            seleccion = st.multiselect(
+                f"Asignar Agentes Sanitarios a {sup_sel}:", 
+                options=agentes, 
+                default=actuales, 
+                key=f"ms_grupo_{sup_sel}"
+            )
 
-            if st.button("💾 Guardar Grupo"):
+            if st.button("💾 Guardar Cambios en el Grupo"):
+                # Borramos la relación vieja y grabamos la nueva
                 cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (sup_sel,))
                 for a in seleccion:
                     cursor.execute("INSERT INTO asignaciones (supervisor, agente) VALUES (?, ?)", (sup_sel, a))
                 conn.commit()
-                st.success("✅ Grupo guardado.")
+                st.success(f"✅ El grupo de {sup_sel} ha sido actualizado.")
                 st.rerun()
 
-    # --- PESTAÑA SISTEMA (AUDITORÍA) ---
-    with tab_s:
-        st.subheader("🚨 Estado del Sistema")
-        cursor.execute("CREATE TABLE IF NOT EXISTS auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, usuario TEXT, accion TEXT, detalles TEXT)")
-        conn.commit()
-        
-        df_audit = pd.read_sql("SELECT * FROM auditoria ORDER BY id DESC LIMIT 10", conn)
-        if df_audit.empty:
-            st.info("No hay registros de auditoría.")
-        else:
-            st.table(df_audit)
+            # Resumen visual
+            st.write("---")
+            st.markdown("### 📋 Mapa de Trabajo Actual")
+            df_mapa = pd.read_sql("SELECT supervisor as 'Supervisor', agente as 'Agente Asignado' FROM asignaciones", conn)
+            st.table(df_mapa)
+
+    with tab_r:
+        st.subheader("🔄 Control de Ronda")
+        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+        res = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        r_val = int(res[0]) if res else 1
+        st.metric("Ronda Epidemiológica", r_val)
+        nueva_r = st.number_input("Cambiar a Ronda:", min_value=1, value=r_val)
+        if st.button("Grabar Ronda"):
+            cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (str(nueva_r),))
+            conn.commit()
+            st.success("Ronda actualizada.")
+            st.rerun()
 
     conn.close()
 # ==========================================
@@ -1551,6 +1545,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
