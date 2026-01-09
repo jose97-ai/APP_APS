@@ -246,34 +246,24 @@ def inicializar_tablas_sistema():
 def bloque_0_dashboard():
     st.title("🏠 Panel de Control APS - Orán")
     
-    # 1. Conexión segura a la base de datos
     try:
         conn = sqlite3.connect('aps_oran_final.db')
         
-        # 2. Cálculos rápidos (Métricas)
-        # Total de personas censadas
+        # Métricas
         total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
         
-        # Alerta de Vacunas (Instrucción del 07/01/2026: Niños sin registros)
-        # Filtramos menores de 5 años que no están en la tabla de vacunas
         query_vacunas = """
             SELECT COUNT(*) as cant FROM integrantes 
             WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
         """
         ninos_sin_vacuna = pd.read_sql(query_vacunas, conn).iloc[0]['cant']
 
-        # 3. Visualización de Métricas en Columnas
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             st.metric("Población Total", f"{total_personas} hab.")
-        
         with col2:
-            # Color inverso: si el número de niños sin vacuna sube, se pone en rojo
             st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Sin registro", delta_color="inverse")
-            
         with col3:
-            # Ejemplo de seguimiento de casos (puedes cambiar 'tbc' por la tabla que desees)
             try:
                 casos_activos = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
                 st.metric("Casos TBC", f"{casos_activos} activos", delta="Seguimiento")
@@ -281,23 +271,54 @@ def bloque_0_dashboard():
                 st.metric("Casos TBC", "0 activos")
 
         st.divider()
-
-        # 4. Sección de accesos rápidos
         st.subheader("📌 Estado del Sistema")
         st.info("""
             **Nota del 07/01/2026:**
             * Las alertas de vacunación están sincronizadas con el **Bloque 11**.
             * Para cambiar su contraseña de acceso, diríjase al **Bloque 9 (Configuración)**.
         """)
-
-        conn.close() # Cerramos conexión siempre
+        conn.close()
 
     except Exception as e:
-        # Si algo falla aquí, la app sigue viva y te avisa qué pasó
         st.error(f"Error técnico en el Dashboard: {e}")
-        st.warning("La base de datos podría estar ocupada o el archivo 'aps_oran_final.db' no se encuentra.")
-
+    
     st.caption("Actualizado: Enero 2026")
+
+# --- ESTA ES LA PARTE QUE HACE QUE APAREZCA LA BARRA LATERAL ---
+
+def main():
+    # Configuramos la barra lateral antes que cualquier otra cosa
+    st.sidebar.title("🏥 Menú APS Orán")
+    st.sidebar.markdown("---")
+    
+    opciones = [
+        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+    ]
+
+    # La clave 'key' evita el error de duplicados
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="nav_oran_2026")
+
+    # Lógica de navegación
+    if menu == "🏠 Panel de Control":
+        bloque_0_dashboard()
+    elif menu == "🚨 11. Vigilancia Alertas":
+        # Asegúrate de que esta función exista arriba en tu código
+        if 'bloque_11_vigilancia_epidemiologica' in globals():
+            bloque_11_vigilancia_epidemiologica()
+        else:
+            st.warning("El Bloque 11 aún no está definido.")
+    elif menu == "⚙️ 9. Admin":
+        # Aquí es donde pondrás el cambio de contraseña solicitado el 07/01
+        st.info("Configuraciones del sistema y cambio de contraseña.")
+    else:
+        st.write(f"Has seleccionado: {menu}")
+
+# DISPARADOR ÚNICO: Debe estar al final de TODO el archivo
+if __name__ == "__main__":
+    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1710,6 +1731,7 @@ def main():
 # =================================================================
 if __name__ == "__main__":
     main()
+
 
 
 
