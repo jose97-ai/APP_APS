@@ -86,53 +86,107 @@ import pydeck as pdk
 from datetime import datetime, date
 
 # ==========================================
+# FUNCIONES DE SOPORTE (Copiar antes del Bloque 0)
+# ==========================================
+
+def obtener_equipo_agentes(nombre_supervisor):
+    """Busca en la DB todos los agentes asignados a este supervisor"""
+    conn = obtener_conexion()
+    try:
+        query = "SELECT usuario FROM usuarios WHERE supervisor_asignado = ?"
+        df = pd.read_sql(query, conn, params=(nombre_supervisor,))
+        lista_equipo = df['usuario'].tolist()
+    except:
+        lista_equipo = []
+    finally:
+        conn.close()
+    
+    lista_equipo.append(nombre_supervisor) # Incluimos al supervisor
+    return lista_equipo
+
+def obtener_ronda_info():
+    """Calcula ronda por fecha y recupera la manual de la DB"""
+    mes_actual = datetime.now().month
+    ronda_sugerida = (mes_actual - 1) // 3 + 1
+    
+    conn = obtener_conexion()
+    try:
+        res = pd.read_sql("SELECT valor FROM configuracion WHERE parametro='ronda_actual'", conn)
+        ronda_manual = int(res.iloc[0]['valor'])
+    except:
+        ronda_manual = ronda_sugerida
+    finally:
+        conn.close()
+    return ronda_manual, ronda_sugerida
+
+# ==========================================
 # 0. NÚCLEO, BASE DE DATOS Y LÓGICA
 # ==========================================
 def bloque_0_dashboard():
-    st.title("🏥 Panel de Control - APS Orán")
+    # 1. Gestión de Ronda
+    ronda_act, ronda_sug = obtener_ronda_info()
+    st.title(f"🏥 Panel de Control - Ronda N° {ronda_act}")
     
+    # 2. Identificación de Usuario y Rol
     usuario = st.session_state.get('usuario_logueado', 'Agente')
-    st.info(f"¡Buen día, **{usuario}**! Aquí tienes el resumen de tu sector para hoy.")
+    rol = st.session_state.get('rol_usuario', 'Agente')
 
-    # --- LÓGICA DE DATOS REALES ---
+    # --- LÓGICA DE FILTRADO POR ROL (Jerarquía) ---
     conn = obtener_conexion()
     
-    # 1. Contar familias (integrantes únicos por apellido de familia)
+    if rol == "Supervisor":
+        equipo = obtener_equipo_agentes(usuario)
+        placeholders = ', '.join(['?'] * len(equipo))
+        filtro_sql = f"IN ({placeholders})"
+        params = tuple(equipo)
+        st.info(f"📋 **Vista de Supervisor**: Datos del equipo bajo cargo de {usuario}.")
+    elif rol == "Administrador":
+        filtro_sql = "IS NOT NULL"
+        params = ()
+        st.info(f"🌐 **Vista Global**: Resumen general de todo el municipio.")
+        if ronda_act != ronda_sug:
+            st.warning(f"🔔 **Aviso Admin**: Por fecha calendario debería ser Ronda {ronda_sug}. Actualice en Bloque 9 si corresponde.")
+    else:
+        filtro_sql = "= ?"
+        params = (usuario,)
+        st.info(f"¡Buen día, **{usuario}**! Resumen de tu sector para hoy.")
+
+    # --- CONSULTAS A LA BASE DE DATOS (Manejo de errores integrado) ---
     try:
-        total_familias = pd.read_sql("SELECT COUNT(DISTINCT familia) as total FROM integrantes WHERE registrado_por=?", 
-                                    conn, params=(usuario,)).iloc[0]['total']
+        # Familias totales según alcance
+        query_f = f"SELECT COUNT(DISTINCT familia) as total FROM integrantes WHERE registrado_por {filtro_sql}"
+        total_familias = pd.read_sql(query_f, conn, params=params).iloc[0]['total']
         
-        # 2. Buscar niños con vacunas incompletas (Ejemplo: menores de 5 años sin registros recientes)
-        # Esta es la alerta específica que solicitaste agregar
-        query_niños = """
+        # Niños con esquema incompleto (Menores de 6 años sin vacunas registradas)
+        query_v = f"""
             SELECT COUNT(DISTINCT i.dni) as total 
             FROM integrantes i
             LEFT JOIN vacunas v ON i.dni = v.dni
-            WHERE i.registrado_por = ? 
+            WHERE i.registrado_por {filtro_sql} 
             AND (strftime('%Y', 'now') - strftime('%Y', i.f_nac)) < 6
             AND v.dni IS NULL
         """
-        niños_riesgo = pd.read_sql(query_niños, conn, params=(usuario,)).iloc[0]['total']
+        niños_riesgo = pd.read_sql(query_v, conn, params=params).iloc[0]['total']
         
-        # 3. Casos de TBC activos
-        tbc_activos = pd.read_sql("SELECT COUNT(*) as total FROM tbc WHERE registrado_por=? AND estado='Supervisada (DOTS)'", 
-                                 conn, params=(usuario,)).iloc[0]['total']
-    except:
+        # Pacientes TBC en tratamiento activo
+        query_t = f"SELECT COUNT(*) as total FROM tbc WHERE registrado_por {filtro_sql} AND estado='Supervisada (DOTS)'"
+        tbc_activos = pd.read_sql(query_t, conn, params=params).iloc[0]['total']
+    except Exception as e:
         total_familias, niños_riesgo, tbc_activos = 0, 0, 0
     finally:
         conn.close()
 
-    # --- DISEÑO VISUAL (TARJETAS) ---
+    # --- INDICADORES VISUALES ---
     c1, c2, c3 = st.columns(3)
     
     with c1:
-        st.metric(label="Familias en tu Sector", value=int(total_familias))
+        st.metric(label="Familias Censadas", value=int(total_familias))
     
     with c2:
         if niños_riesgo > 0:
-            st.warning(f"⚠️ {niños_riesgo} Niños con esquema incompleto")
+            st.warning(f"⚠️ {niños_riesgo} Niños con vacunas pendientes")
         else:
-            st.success("✅ Vacunación infantil al día")
+            st.success("✅ Esquemas de vacunación al día")
             
     with c3:
         if tbc_activos > 0:
@@ -142,33 +196,33 @@ def bloque_0_dashboard():
 
     st.divider()
 
-    # --- ACCESOS RÁPIDOS ---
-    st.subheader("🚀 Acciones Rápidas")
+    # --- ACCIONES Y MANUAL ---
     col_a, col_b = st.columns(2)
     
     with col_a:
-        if st.button("📝 Iniciar Nuevo Censo"):
-            st.session_state.menu_actual = "1. Censo" # Lógica para saltar de pestaña
-            st.info("Ve al menú lateral y selecciona '1. Censo'")
+        st.subheader("🚀 Navegación Rápida")
+        if st.button("📝 Ir a Censo"):
+            st.switch_page("main.py") # O la lógica de menú que uses
             
     with col_b:
-        if st.button("📍 Ver Mapa de Riesgo"):
-            st.info("Ve al menú lateral y selecciona '8. Mapas'")
-
-    # --- NOTA DEL MANUAL (Solicitada) ---
-    with st.expander("📌 Recordatorio del Manual"):
-        st.write("""
-        - **Cambio de contraseña:** Si necesitas cambiar tu clave, ve al Bloque 9.
-        - **Sincronización:** Asegúrate de tener señal antes de cerrar la sesión para confirmar que los datos se guardaron en el servidor.
-        """)
+        with st.expander("📌 Recordatorio del Manual"):
+            st.markdown(f"""
+            * **Ronda Actual:** {ronda_act} (Ciclo de 3 meses).
+            * **Contraseña:** Si la olvidaste, contacta al Administrador.
+            * **Seguridad:** No compartas tu usuario con otros agentes.
+            """)
 # ==========================================
-# BLOQUE 1: CENSO (PERSONALIZADO POR USUARIO)
+# BLOQUE 1: CENSO (ACTUALIZADO CON RONDA)
 # ==========================================
 def bloque_1_censo():
-    # Asumimos que el usuario está guardado en st.session_state['usuario_logueado']
+    # Asumimos que el usuario está guardado en st.session_state
     usuario_actual = st.session_state.get('usuario_logueado', 'admin') 
+    
+    # 1. Recuperamos la Ronda Actual (usando la función que creamos antes)
+    ronda_actual_valor, _ = obtener_ronda_info()
 
-    st.header(f"📋 Bloque 1: Censo y Registro Civil (Agente: {usuario_actual})")
+    st.header(f"📋 Bloque 1: Censo - Ronda N° {ronda_actual_valor}")
+    st.caption(f"Agente: {usuario_actual}")
     
     tab1, tab2 = st.tabs(["📝 Registrar Integrante", "🔍 Gestión de Mis Cargas"])
     
@@ -203,41 +257,44 @@ def bloque_1_censo():
                     fecha_db = f_nac_obj.strftime('%Y-%m-%d')
                     sexo_db = "M" if sexo == "Masculino" else "F"
                     
-                    conn = sqlite3.connect('aps_oran_final.db')
+                    conn = obtener_conexion()
                     try:
-                        # Se agregó la columna 'registrado_por' al final
+                        # Se agregó 'ronda' a la inserción
                         conn.execute("""INSERT OR REPLACE INTO integrantes 
-                            (dni, nro_aps, familia, nombre, f_nac, sexo, nivel_ed, estado_ed, latitud, longitud, obra_social, fecha_registro, registrado_por) 
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                            (dni, n_aps, fam, nom, fecha_db, sexo_db, nivel_ed, estado_ed, lat, lon, obra_social, str(hoy), usuario_actual))
+                            (dni, nro_aps, familia, nombre, f_nac, sexo, nivel_ed, estado_ed, 
+                             latitud, longitud, obra_social, fecha_registro, registrado_por, ronda) 
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            (dni, n_aps, fam, nom, fecha_db, sexo_db, nivel_ed, estado_ed, 
+                             lat, lon, obra_social, str(hoy), usuario_actual, ronda_actual_valor))
                         conn.commit()
-                        st.success(f"✅ {nom} guardado correctamente bajo tu usuario.")
+                        st.success(f"✅ {nom} guardado en Ronda {ronda_actual_valor}.")
                     except sqlite3.OperationalError:
-                        # Si la columna no existe aún, la creamos automáticamente
-                        conn.execute("ALTER TABLE integrantes ADD COLUMN registrado_por TEXT")
+                        # Si la columna ronda no existe, la creamos
+                        conn.execute("ALTER TABLE integrantes ADD COLUMN ronda TEXT")
                         conn.commit()
-                        st.info("Actualizando estructura de base de datos... Por favor reintente el guardado.")
+                        st.info("Actualizando base de datos... Reintente el guardado.")
                     finally:
                         conn.close()
                 else:
                     st.error("⚠️ Complete todos los campos.")
 
-    # --- PESTAÑA 2: BÚSQUEDA (SOLO MIS DATOS) ---
+    # --- PESTAÑA 2: BÚSQUEDA (FILTRADO POR USUARIO) ---
     with tab2:
-        st.subheader("🏠 Mis Cargas por N° de APS")
+        st.subheader("🏠 Mis Cargas en Ronda Actual")
         busqueda_aps = st.text_input("Ingrese N° de Casa", key="busqueda_aps_input")
         
         if busqueda_aps:
-            conn = sqlite3.connect('aps_oran_final.db')
-            # FILTRO CRUCIAL: WHERE nro_aps = ? AND registrado_por = ?
-            query = "SELECT dni, nombre, f_nac FROM integrantes WHERE nro_aps = ? AND registrado_por = ?"
-            df_familia = pd.read_sql(query, conn, params=(busqueda_aps, usuario_actual))
+            conn = obtener_conexion()
+            # Ahora mostramos los datos cargados en la ronda vigente por este agente
+            query = """SELECT dni, nombre, f_nac FROM integrantes 
+                       WHERE nro_aps = ? AND registrado_por = ? AND ronda = ?"""
+            df_familia = pd.read_sql(query, conn, params=(busqueda_aps, usuario_actual, ronda_actual_valor))
             
             if not df_familia.empty:
                 for index, row in df_familia.iterrows():
                     c_inf, c_del = st.columns([4, 1])
                     faltantes = chequear_vacunas_faltantes(row['dni'])
-                    alerta = f" | ⚠️ **Faltan:** {', '.join(faltantes)}" if faltantes else " | ✅ Al día"
+                    alerta = f" | ⚠️ **Vacunas:** {', '.join(faltantes)}" if faltantes else " | ✅ Al día"
                     
                     c_inf.write(f"🔹 **{row['nombre']}** (DNI: {row['dni']}){alerta}")
                     
@@ -246,218 +303,275 @@ def bloque_1_censo():
                         conn.commit()
                         st.rerun()
             else:
-                st.info("No se encontraron registros cargados por ti en esta casa.")
+                st.info(f"No hay registros tuyos en esta casa para la Ronda {ronda_actual_valor}.")
             conn.close()
 # ==========================================
-# BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS
+# BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS (ACTUALIZADO)
 # ==========================================
 def bloque_2_materno():
-    # Recuperamos el usuario activo desde el estado de la sesión
+    from datetime import timedelta
+    # 1. Recuperamos usuario, rol y ronda actual
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
+    rol_actual = st.session_state.get('rol_usuario', 'Agente')
+    ronda_actual_valor, _ = obtener_ronda_info()
 
-    st.header(f"🤰 Bloque 2: Control Prenatal, Parto y Recién Nacido (Agente: {usuario_actual})")
+    st.header(f"🤰 Bloque 2: Control Materno-Infantil - Ronda N° {ronda_actual_valor}")
+    st.caption(f"Usuario: {usuario_actual} ({rol_actual})")
     
-    # --- Pestañas para separar Registro de Visualización ---
-    tab1, tab2 = st.tabs(["📝 Registrar Control", "📂 Mis Registros"])
+    tab1, tab2 = st.tabs(["📝 Registrar Control", "📂 Visualización de Datos"])
 
+    # --- PESTAÑA 1: REGISTRO (Solo agentes o admin) ---
     with tab1:
-        dni_m = st.text_input("Ingrese DNI de la Embarazada o Madre para control", key="dni_m_registro")
+        dni_m = st.text_input("Ingrese DNI de la embarazada para control", key="dni_m_registro")
         
         if dni_m:
             with st.form("form_materno_final", clear_on_submit=True):
                 st.subheader("📅 Seguimiento de Gestación")
                 c1, c2, c3 = st.columns(3)
-                
                 fum = c1.date_input("F.U.M (Última Menstruación)")
                 fpp = c2.date_input("F.P.P (Fecha Probable de Parto)")
                 fde = c3.date_input("F.D.E (Fecha de Embarazo)")
                 
-                st.write("**Controles Trimestrales (MELON)**")
+                st.write("**Controles Trimestrales Realizados**")
                 t1, t2, t3 = st.columns(3)
                 m1 = t1.checkbox("1er Trimestre")
                 m2 = t2.checkbox("2do Trimestre")
                 m3 = t3.checkbox("3er Trimestre")
 
                 st.divider()
-                
-                st.subheader("🏥 Datos del Parto y Nacimiento")
+                st.subheader("🏥 Datos del Parto / Nacimiento")
                 cp1, cp2, cp3 = st.columns(3)
                 f_parto = cp1.date_input("Fecha Real del Parto")
                 l_parto = cp2.text_input("Lugar del Parto")
                 tipo_p = cp3.selectbox("Terminación", ["Parto Normal", "Cesárea", "Aborto"])
                 
-                st.divider()
-                
-                st.subheader("👶 Datos del Recién Nacido")
-                cr1, cr2, cr3 = st.columns(3)
-                peso_rn = cr1.number_input("Peso al Nacer (kg)", format="%.3f")
-                talla_rn = cr2.number_input("Talla al Nacer (cm)")
-                pesquisa = cr3.date_input("Fecha de Pesquisa")
-
-                if st.form_submit_button("💾 Guardar Información"):
-                    conn = sqlite3.connect('aps_oran_final.db')
+                if st.form_submit_button("💾 Guardar Control Materno"):
+                    conn = obtener_conexion()
                     try:
-                        # Agregamos la columna 'registrado_por' para filtrar por usuario
+                        # Insertamos incluyendo registrado_por y ronda
                         conn.execute("""INSERT OR REPLACE INTO controles_embarazo 
-                            (dni, fum, fpp, fde, m_1ro, m_2do, m_3ro, parto_fecha, parto_lugar, aborto, registrado_por) 
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                            (dni, fum, fpp, fde, m_1ro, m_2do, m_3ro, parto_fecha, parto_lugar, aborto, registrado_por, ronda) 
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (dni_m, str(fum), str(fpp), str(fde), str(m1), str(m2), str(m3), 
-                             str(f_parto), l_parto, "Sí" if tipo_p == "Aborto" else "No", usuario_actual))
+                             str(f_parto), l_parto, "Sí" if tipo_p == "Aborto" else "No", usuario_actual, ronda_actual_valor))
                         conn.commit()
-                        st.success(f"✅ Datos de DNI {dni_m} guardados bajo tu usuario.")
+                        st.success(f"✅ Control de DNI {dni_m} guardado con éxito en Ronda {ronda_actual_valor}.")
                     except sqlite3.OperationalError:
-                        # Si la columna no existe aún en la tabla original, la agregamos
-                        conn.execute("ALTER TABLE controles_embarazo ADD COLUMN registrado_por TEXT")
+                        # Auto-reparación de tabla si faltan columnas
+                        cursor = conn.cursor()
+                        cursor.execute("ALTER TABLE controles_embarazo ADD COLUMN registrado_por TEXT")
+                        cursor.execute("ALTER TABLE controles_embarazo ADD COLUMN ronda TEXT")
                         conn.commit()
-                        st.info("Actualizando tabla... Por favor reintente el guardado.")
+                        st.info("Estructura actualizada. Por favor, presione 'Guardar' nuevamente.")
                     finally:
                         conn.close()
         else:
-            st.warning("Debe ingresar un DNI para habilitar el formulario.")
+            st.warning("Ingrese un DNI para habilitar el formulario de control.")
 
+    # --- PESTAÑA 2: VISUALIZACIÓN (CON FILTRO DE JERARQUÍA) ---
     with tab2:
-        st.subheader("📋 Listado de mis seguimientos maternos")
-        conn = sqlite3.connect('aps_oran_final.db')
+        st.subheader("📋 Seguimiento de Pacientes")
+        conn = obtener_conexion()
         
-        # Filtro estricto para ver solo lo que cargó el usuario actual
-        query = """
-            SELECT e.dni, i.nombre, e.fpp as 'Fecha Parto Probable', e.parto_fecha as 'Fecha Real'
+        # Aplicamos la lógica de jerarquía para la consulta
+        if rol_actual == "Supervisor":
+            equipo = obtener_equipo_agentes(usuario_actual)
+            placeholders = ', '.join(['?'] * len(equipo))
+            filtro_sql = f"WHERE e.registrado_por IN ({placeholders})"
+            params = tuple(equipo)
+        elif rol_actual == "Administrador":
+            filtro_sql = "" # El admin ve todo Orán
+            params = ()
+        else:
+            filtro_sql = "WHERE e.registrado_por = ?"
+            params = (usuario_actual,)
+
+        query = f"""
+            SELECT e.dni, i.nombre, e.fpp as 'Fecha Parto Probable', e.parto_fecha as 'Fecha Real', e.registrado_por as 'Agente', e.ronda
             FROM controles_embarazo e
             JOIN integrantes i ON e.dni = i.dni
-            WHERE e.registrado_por = ?
+            {filtro_sql}
         """
-        df_mis_partos = pd.read_sql(query, conn, params=(usuario_actual,))
         
-        if not df_mis_partos.empty:
-            st.dataframe(df_mis_partos, use_container_width=True)
+        try:
+            df_partos = pd.read_sql(query, conn, params=params)
             
-            # Alerta rápida para partos inminentes del usuario
-            hoy = date.today()
-            inminentes = df_mis_partos[pd.to_datetime(df_mis_partos['Fecha Parto Probable']).dt.date <= hoy + timedelta(days=7)]
-            if not inminentes.empty:
-                st.error(f"⚠️ Tienes {len(inminentes)} pacientes con parto probable en los próximos 7 días.")
-        else:
-            st.info("No has registrado controles maternos todavía.")
-        conn.close()
+            if not df_partos.empty:
+                st.dataframe(df_partos, use_container_width=True)
+                
+                # Alerta de partos próximos (7 días)
+                hoy = date.today()
+                # Limpiamos fechas para evitar errores de formato
+                df_partos['Fecha Parto Probable'] = pd.to_datetime(df_partos['Fecha Parto Probable']).dt.date
+                proximos = df_partos[(df_partos['Fecha Parto Probable'] <= hoy + timedelta(days=7)) & 
+                                     (df_partos['Fecha Real'] == 'None')]
+                
+                if not proximos.empty:
+                    st.error(f"⚠️ **Alerta de Partos Inminentes:** Hay {len(proximos)} pacientes con F.P.P. en la próxima semana.")
+                    st.table(proximos[['dni', 'nombre', 'Fecha Parto Probable', 'Agente']])
+            else:
+                st.info("No se registran controles en el alcance seleccionado.")
+        except:
+            st.error("Error al cargar la tabla. Asegúrese de que los DNI existan en el Censo (Bloque 1).")
+        finally:
+            conn.close()
 # ==========================================
-# BLOQUE 3: VIVIENDA (ACTUALIZACIÓN PRIVADA)
+# BLOQUE 3: VIVIENDA, VISITAS Y PRIORIDAD
 # ==========================================
 def bloque_3_vivienda():
-    # Recuperamos el usuario activo
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
+    ronda_actual, _ = obtener_ronda_info()
 
-    st.header(f"🏠 Bloque 3: Condiciones de la Vivienda (Agente: {usuario_actual})")
+    st.header(f"🏠 Bloque 3: Gestión de Vivienda (Ronda {ronda_actual})")
     
-    naps_v = st.text_input("Ingrese N° de APS / Casa para actualizar")
+    # BUSCADOR POR NÚMERO DE VIVIENDA
+    naps_v = st.text_input("🔍 Buscar por N° de APS / Casa", help="Ingrese el número de casa para ver historial y editar")
     
     if naps_v:
-        conn = sqlite3.connect('aps_oran_final.db')
-        # Verificamos si esta casa fue registrada por el usuario actual
-        check = pd.read_sql_query(
-            "SELECT COUNT(*) as cuenta FROM integrantes WHERE nro_aps = ? AND registrado_por = ?", 
-            conn, params=(naps_v, usuario_actual)
+        conn = obtener_conexion()
+        # Verificamos existencia y prioridad actual
+        vivienda_data = pd.read_sql_query(
+            "SELECT familia, prioridad, registrado_por FROM integrantes WHERE nro_aps = ? LIMIT 1", 
+            conn, params=(naps_v,)
         )
         
-        if check['cuenta'][0] > 0:
-            with st.form("form_vivienda_final_completo"):
-                # SECCIÓN 1: TENENCIA DE LA PROPIEDAD
-                st.subheader("🔑 Situación Habitacional")
-                tenencia = st.selectbox(
-                    "Tenencia de la Propiedad", 
-                    ["Propia", "Alquilada", "Heredada", "Proporcionada por el Estado", "Otro / Ocupación"],
-                    help="Especifique la situación legal de la vivienda."
-                )
-
-                st.divider()
+        if not vivienda_data.empty:
+            familia_nombre = vivienda_data['familia'][0]
+            prioridad_actual = vivienda_data['prioridad'][0]
+            
+            # MOSTRAR CABECERA DE LA CASA
+            st.subheader(f"Casa N° {naps_v} - Familia {familia_nombre}")
+            
+            # --- SECCIÓN A: MARCADO DE VISITA Y PRIORIDAD ---
+            col_v1, col_v2 = st.columns(2)
+            
+            with col_v1:
+                st.write("📌 **Estado y Seguimiento**")
+                nueva_prioridad = st.selectbox("Nivel de Prioridad", ["Normal", "Media", "ALTA PRIORIDAD"], 
+                                               index=["Normal", "Media", "ALTA PRIORIDAD"].index(prioridad_actual))
                 
-                # SECCIÓN 2: SERVICIOS Y RESIDUOS
-                st.subheader("📍 Servicios y Saneamiento")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    agua = st.selectbox("Fuente de Agua", ["Servicio (Red)", "Bomba/Cisterna", "Tachos", "Pozo", "Vertiente"])
-                    baño = st.selectbox("Tipo de Baño", ["Cloaca", "Pozo Ciego", "Letrina", "Sin Baño"])
-                    residuos = st.radio("Gestión de Basura", ["Servicio de Recolección", "Quema de Basura", "Entierro/Otro"], horizontal=True)
-
-                with col2:
-                    tipo_cocina = st.selectbox("Tipo de Cocina", ["Gas Natural", "Gas Envasado", "Leña", "Carbón", "Electricidad"])
-                    produccion = st.multiselect("Producción Domiciliaria", ["Huerta", "Granja", "Ninguno"], default=["Ninguno"])
-
-                st.divider()
-                
-                # SECCIÓN 3: MATERIALES
-                st.subheader("🏗️ Materiales de Construcción")
-                c3, c4, c5 = st.columns(3)
-                piso = c3.selectbox("Piso", ["Cerámico/Mosaico", "Cemento", "Tierra", "Madera"])
-                techo = c4.selectbox("Techo", ["Loza", "Chapa Zinc", "Chapa Cartón", "Madera/Barro", "Paja"])
-                pared = c5.selectbox("Paredes", ["Ladrillo/Bloque", "Adobe", "Madera", "Cartón/Plástico"])
-
-                if st.form_submit_button("💾 Guardar Datos de Vivienda"):
-                    prod_txt = ", ".join(produccion)
-                    
-                    # Filtramos el UPDATE por nro_aps Y registrado_por para mayor seguridad
-                    conn.execute("""UPDATE integrantes SET 
-                        tenencia=?, agua=?, excretas=?, basura=?, cocina=?, produccion=?, techo=?, piso=?, paredes=?
-                        WHERE nro_aps=? AND registrado_por=?""",
-                        (tenencia, agua, baño, residuos, tipo_cocina, prod_txt, techo, piso, pared, naps_v, usuario_actual))
-                    
+                if st.button("🚩 Actualizar Prioridad"):
+                    conn.execute("UPDATE integrantes SET prioridad = ? WHERE nro_aps = ?", (nueva_prioridad, naps_v))
                     conn.commit()
-                    st.success(f"✅ Datos de la vivienda N° {naps_v} actualizados con éxito.")
+                    st.success("Prioridad actualizada")
+
+            with col_v2:
+                st.write("📅 **Registrar Nueva Visita**")
+                if st.button("✅ Marcar Visita Realizada Hoy"):
+                    fecha_hoy = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    conn.execute("INSERT INTO visitas (nro_aps, fecha_visita, agente, ronda) VALUES (?,?,?,?)",
+                                 (naps_v, fecha_hoy, usuario_actual, ronda_actual))
+                    conn.commit()
+                    st.success(f"Visita registrada: {fecha_hoy}")
+
+            # --- SECCIÓN B: HISTORIAL DE VISITAS ---
+            with st.expander("📜 Ver Historial de Visitas de esta casa"):
+                historial = pd.read_sql_query("SELECT fecha_visita, agente, ronda FROM visitas WHERE nro_aps = ? ORDER BY rowid DESC", 
+                                              conn, params=(naps_v,))
+                if not historial.empty:
+                    st.table(historial)
+                else:
+                    st.info("No hay visitas registradas anteriormente.")
+
+            st.divider()
+
+            # --- SECCIÓN C: FORMULARIO DE CONDICIONES (Solo editable por el dueño o Admin) ---
+            if usuario_actual == vivienda_data['registrado_por'][0] or st.session_state.get('rol_usuario') == "Administrador":
+                with st.form("form_vivienda_detallado"):
+                    st.subheader("🏗️ Condiciones Habitacionales")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        tenencia = st.selectbox("Tenencia", ["Propia", "Alquilada", "Heredada", "Estado", "Ocupación"])
+                        agua = st.selectbox("Agua", ["Red", "Bomba", "Tachos", "Pozo"])
+                        baño = st.selectbox("Baño", ["Cloaca", "Pozo Ciego", "Letrina", "Sin Baño"])
+                    with col2:
+                        piso = st.selectbox("Piso", ["Cerámico", "Cemento", "Tierra", "Madera"])
+                        techo = st.selectbox("Techo", ["Loza", "Chapa", "Barro/Madera", "Paja"])
+                        pared = st.selectbox("Paredes", ["Ladrillo", "Adobe", "Madera", "Plástico"])
+                    
+                    if st.form_submit_button("💾 Guardar Cambios Estructurales"):
+                        conn.execute("""UPDATE integrantes SET 
+                            tenencia=?, agua=?, excretas=?, techo=?, piso=?, paredes=?
+                            WHERE nro_aps=?""",
+                            (tenencia, agua, baño, techo, piso, pared, naps_v))
+                        conn.commit()
+                        st.success("Condiciones de vivienda actualizadas.")
+            else:
+                st.warning("Solo el agente que censó esta casa puede editar sus materiales.")
         else:
-            st.error(f"⚠️ No tienes permisos para editar la Casa N° {naps_v} o la misma no existe en tus registros.")
-        
+            st.error("Casa no encontrada. Verifique el número de APS.")
         conn.close()
     else:
-        st.info("Por favor, ingrese el Número de APS para gestionar los datos de la vivienda.")
+        st.info("Use el buscador superior para gestionar una vivienda.")
 # ==========================================
-# BLOQUE 4: VACUNAS (CON ALERTAS Y PRIVACIDAD)
+# BLOQUE 4: VACUNAS (CON ALERTAS Y JERARQUÍA)
 # ==========================================
 def bloque_4_vacunas():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    st.header(f"💉 Bloque 4: Inmunizaciones (Agente: {usuario_actual})")
+    rol_actual = st.session_state.get('rol_usuario', 'Agente')
+    ronda_actual_valor, _ = obtener_ronda_info()
+
+    st.header(f"💉 Bloque 4: Inmunizaciones - Ronda N° {ronda_actual_valor}")
     
     # 1. Manual de Usuario integrado
-    with st.expander("📖 Manual: Cómo gestionar el Carnet Digital"):
-        st.write("""
-        - **Búsqueda:** Ingrese el DNI para verificar el estado. Solo podrá gestionar pacientes que usted haya censado.
-        - **Alertas:** El sistema detecta automáticamente vacunas faltantes según la edad y la zona (incluye Fiebre Amarilla).
-        - **Lote:** Es obligatorio registrar el número de lote para trazabilidad epidemiológica.
+    with st.expander("📖 Manual: Gestión de Carnet y Alertas"):
+        st.write(f"""
+        - **Privacidad:** Los agentes solo gestionan sus pacientes. Supervisores ven a todo su equipo.
+        - **Ronda:** El registro queda vinculado a la Ronda actual ({ronda_actual_valor}).
+        - **Alertas Críticas:** Prioridad absoluta a la **Fiebre Amarilla** por ser zona de riesgo (Orán).
         """)
     
     dni_v = st.text_input("🔍 Ingrese DNI del paciente para gestionar vacunas", key="busqueda_vacuna")
     
     if dni_v:
-        conn = sqlite3.connect('aps_oran_final.db')
-        # Filtro de privacidad: Solo ver si fue registrado por el usuario actual
-        persona = pd.read_sql("SELECT nombre, f_nac FROM integrantes WHERE dni=? AND registrado_por=?", 
-                             conn, params=(dni_v, usuario_actual))
+        conn = obtener_conexion()
+        
+        # --- LÓGICA DE PERMISOS (JERARQUÍA) ---
+        if rol_actual == "Supervisor":
+            equipo = obtener_equipo_agentes(usuario_actual)
+            placeholders = ', '.join(['?'] * len(equipo))
+            query_persona = f"SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
+            params = [dni_v] + equipo
+        elif rol_actual == "Administrador":
+            query_persona = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=?"
+            params = [dni_v]
+        else:
+            query_persona = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
+            params = [dni_v, usuario_actual]
+
+        persona = pd.read_sql(query_persona, conn, params=params)
         
         if not persona.empty:
             nombre = persona['nombre'].iloc[0]
+            agente_responsable = persona['registrado_por'].iloc[0]
             f_nac_raw = persona['f_nac'].iloc[0]
             f_nac = datetime.strptime(f_nac_raw, '%Y-%m-%d').date()
-            edad_meses = (date.today().year - f_nac.year) * 12 + date.today().month - f_nac.month
             
-            st.subheader(f"👤 Paciente: {nombre} ({edad_meses} meses)")
+            # Cálculo de edad
+            hoy = date.today()
+            edad_meses = (hoy.year - f_nac.year) * 12 + hoy.month - f_nac.month
             
-            # --- 1. SISTEMA DE ALERTAS AUTOMÁTICO (BLOQUE 0) ---
-            st.markdown("### 🔔 Alertas de Cobertura")
+            st.subheader(f"👤 Paciente: {nombre}")
+            st.caption(f"Edad: {edad_meses} meses | Cargado por: {agente_responsable}")
+            
+            # --- ALERTAS DE COBERTURA ---
+            st.markdown("### 🔔 Alertas de Esquema")
             faltantes = chequear_vacunas_faltantes(dni_v)
             
             if faltantes:
                 for v_faltante in faltantes:
                     if v_faltante == "Fiebre Amarilla":
-                        st.error(f"🚨 CRÍTICO: Falta {v_faltante} (Obligatoria en Orán)")
+                        st.error(f"🚨 **CRÍTICO:** Falta {v_faltante} (Zona de Riesgo Orán)")
                     else:
                         st.warning(f"❌ Pendiente: {v_faltante}")
             else:
-                st.success("✅ Esquema completo para la edad actual.")
+                st.success("✅ Esquema de vacunación al día para la edad.")
 
-            # --- 2. PESTAÑAS: REGISTRO Y CARNET ---
-            tab_reg, tab_carnet = st.tabs(["📝 Registrar Vacuna", "🗂️ Carnet Digital"])
+            # --- PESTAÑAS: REGISTRO Y CARNET ---
+            tab_reg, tab_carnet = st.tabs(["📝 Registrar Aplicación", "🗂️ Carnet Digital"])
             
             with tab_reg:
-                with st.form("nuevo_registro_vacuna"):
+                with st.form("nuevo_registro_vacuna", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     v_nom = c1.selectbox("Vacuna", ["BCG", "Hepatitis B", "Neumococo", "Quintuple", "IPV", 
                                                  "Rotavirus", "Meningococo", "Triple Viral", "Antigripal", 
@@ -465,217 +579,265 @@ def bloque_4_vacunas():
                     v_dosis = c2.selectbox("Dosis", ["RN", "1ra", "2da", "3ra", "Refuerzo", "Anual"])
                     
                     c3, c4 = st.columns(2)
-                    v_fecha = c3.date_input("Fecha de Aplicación", value=date.today())
+                    v_fecha = c3.date_input("Fecha de Aplicación", value=hoy)
                     v_lote = c4.text_input("N° de Lote / Serie")
                     
-                    if st.form_submit_button("💾 Guardar en Carnet"):
-                        # Registramos quién aplicó la vacuna
-                        conn.execute("""INSERT INTO vacunas (dni, vacuna, dosis, fecha, lote, registrado_por) 
-                                     VALUES (?,?,?,?,?,?)""",
-                                    (dni_v, v_nom, v_dosis, str(v_fecha), v_lote, usuario_actual))
-                        conn.commit()
-                        st.success(f"✅ Registrada: {v_nom} - {v_dosis}")
-                        st.rerun()
+                    if st.form_submit_button("💾 Guardar en Historial"):
+                        try:
+                            conn.execute("""INSERT INTO vacunas (dni, vacuna, dosis, fecha, lote, registrado_por, ronda) 
+                                         VALUES (?,?,?,?,?,?,?)""",
+                                        (dni_v, v_nom, v_dosis, str(v_fecha), v_lote, usuario_actual, ronda_actual_valor))
+                            conn.commit()
+                            st.success(f"✅ Registrada: {v_nom} ({v_dosis})")
+                            st.rerun()
+                        except sqlite3.OperationalError:
+                            conn.execute("ALTER TABLE vacunas ADD COLUMN ronda TEXT")
+                            conn.commit()
+                            st.info("Actualizando base de datos... Por favor reintente.")
 
             with tab_carnet:
-                st.markdown("### 📜 Historial de Aplicaciones")
+                st.markdown("### 📜 Historial Completo")
                 df_c = pd.read_sql(f"""SELECT vacuna as 'Vacuna', dosis as 'Dosis', 
-                                   fecha as 'Fecha', lote as 'Lote' FROM vacunas 
-                                   WHERE dni='{dni_v}' ORDER BY fecha DESC""", conn)
+                                   fecha as 'Fecha', lote as 'Lote', ronda as 'Ronda' 
+                                   FROM vacunas WHERE dni=? ORDER BY fecha DESC""", conn, params=(dni_v,))
                 
                 if not df_c.empty:
-                    st.table(df_c)
+                    st.dataframe(df_c, use_container_width=True)
                 else:
-                    st.warning("No hay registros previos.")
+                    st.warning("No hay registros de vacunas para este paciente.")
         else:
-            st.error("⚠️ Acceso Denegado: El paciente no existe o fue cargado por otro agente.")
+            st.error("⚠️ **Acceso Restringido:** El DNI no existe o pertenece a un sector fuera de su supervisión.")
         conn.close()
     else:
-        st.info("👋 Ingrese un DNI para gestionar inmunizaciones.")
+        st.info("👋 Ingrese el DNI del paciente para verificar alertas y cargar vacunas.")
 # ==========================================
-# BLOQUE 5: PESO Y TALLA (IMC Y PRIVACIDAD)
+# BLOQUE 5: NUTRICIÓN (IMC, RONDAS Y EQUIPOS)
 # ==========================================
 def bloque_5_nutricion():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    st.header(f"⚖️ Bloque 5: Evaluación Antropométrica (Agente: {usuario_actual})")
+    rol_actual = st.session_state.get('rol_usuario', 'Agente')
+    ronda_actual_valor, _ = obtener_ronda_info()
+
+    st.header(f"⚖️ Bloque 5: Evaluación Antropométrica - Ronda {ronda_actual_valor}")
+    st.caption(f"Agente/Monitor: {usuario_actual}")
     
-    dni_n = st.text_input("🔍 Ingrese DNI para evaluar nutrición", key="busqueda_nutricion")
+    dni_n = st.text_input("🔍 Ingrese DNI para evaluación nutricional", key="busqueda_nutricion")
     
     if dni_n:
-        conn = sqlite3.connect('aps_oran_final.db')
-        # Filtro de privacidad: Solo ver si el paciente pertenece a los registros del usuario
-        persona = pd.read_sql("SELECT nombre, f_nac FROM integrantes WHERE dni=? AND registrado_por=?", 
-                             conn, params=(dni_n, usuario_actual))
+        conn = obtener_conexion()
+        
+        # --- LÓGICA DE PERMISOS SEGÚN ROL ---
+        if rol_actual == "Supervisor":
+            equipo = obtener_equipo_agentes(usuario_actual)
+            placeholders = ', '.join(['?'] * len(equipo))
+            query_p = f"SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
+            params = [dni_n] + equipo
+        elif rol_actual == "Administrador":
+            query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=?"
+            params = [dni_n]
+        else:
+            query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
+            params = [dni_n, usuario_actual]
+
+        persona = pd.read_sql(query_p, conn, params=params)
         
         if not persona.empty:
             nombre = persona['nombre'].iloc[0]
+            agente_cargo = persona['registrado_por'].iloc[0]
             st.subheader(f"👤 Paciente: {nombre}")
+            st.info(f"Ficha perteneciente al Agente: {agente_cargo}")
             
-            # Pestañas: Nueva Medición e Historial
-            tab_medicion, tab_historial = st.tabs(["📝 Nueva Medición", "📈 Carnet de Crecimiento"])
+            tab_medicion, tab_historial = st.tabs(["📝 Nueva Medición", "📈 Evolución Nutricional"])
             
             with tab_medicion:
-                with st.form("form_nutricion"):
+                with st.form("form_nutricion", clear_on_submit=True):
                     c1, c2, c3 = st.columns(3)
                     peso = c1.number_input("Peso (kg)", min_value=0.0, step=0.100, format="%.3f")
                     talla = c2.number_input("Talla (cm)", min_value=0.0, step=0.5, format="%.1f")
                     f_control = c3.date_input("Fecha de Control", value=date.today())
                     
-                    if st.form_submit_button("⚖️ Calcular y Registrar"):
+                    if st.form_submit_button("⚖️ Calcular e Insertar"):
                         if talla > 0:
-                            # Cálculo automático de IMC
+                            # Cálculo de IMC
                             talla_m = talla / 100
                             imc = round(peso / (talla_m ** 2), 2)
                             
-                            # Guardar indicando quién realizó la medición
                             try:
-                                conn.execute("""INSERT INTO crecimiento (dni, peso, talla, imc, fecha, registrado_por) 
-                                             VALUES (?,?,?,?,?,?)""",
-                                            (dni_n, peso, talla, imc, str(f_control), usuario_actual))
+                                conn.execute("""INSERT INTO crecimiento (dni, peso, talla, imc, fecha, registrado_por, ronda) 
+                                             VALUES (?,?,?,?,?,?,?)""",
+                                            (dni_n, peso, talla, imc, str(f_control), usuario_actual, ronda_actual_valor))
                                 conn.commit()
-                                st.success(f"✅ Medición registrada. IMC: {imc}")
+                                
+                                # Semáforo de salud
+                                if imc < 18.5:
+                                    st.warning(f"⚠️ IMC: {imc} - Bajo Peso (Riesgo Nutricional)")
+                                elif 18.5 <= imc <= 24.9:
+                                    st.success(f"✅ IMC: {imc} - Peso Normal")
+                                elif 25.0 <= imc <= 29.9:
+                                    st.warning(f"⚠️ IMC: {imc} - Sobrepeso")
+                                else:
+                                    st.error(f"🚨 IMC: {imc} - Obesidad")
+                                    
+                                st.balloons()
                             except sqlite3.OperationalError:
-                                # Adaptación automática de tabla si falta la columna
+                                # Reparación por si no existen las nuevas columnas
                                 conn.execute("ALTER TABLE crecimiento ADD COLUMN registrado_por TEXT")
+                                conn.execute("ALTER TABLE crecimiento ADD COLUMN ronda TEXT")
                                 conn.commit()
-                                st.info("Estructura actualizada. Por favor, reintente el registro.")
-                            
-                            # Alertas de estado
-                            if imc < 18.5: st.warning("Estado: Bajo Peso")
-                            elif 18.5 <= imc <= 24.9: st.success("Estado: Normal")
-                            else: st.error("Estado: Sobrepeso / Obesidad")
-                            
-                            st.rerun()
+                                st.info("Base de datos actualizada. Reintente guardar.")
                         else:
-                            st.error("La talla debe ser mayor a 0.")
+                            st.error("Error: La talla debe ser mayor a 0.")
 
             with tab_historial:
-                st.markdown("### 📜 Historial de Mediciones (Carnet Digital)")
-                # Solo mostramos el historial de este paciente si el agente tiene acceso
-                df_historial = pd.read_sql("""
-                    SELECT fecha as 'Fecha', peso as 'Peso (kg)', talla as 'Talla (cm)', imc as 'IMC' 
-                    FROM crecimiento WHERE dni=? ORDER BY fecha DESC
-                """, conn, params=(dni_n,))
+                st.markdown("### 📜 Carnet de Crecimiento")
+                df_hist = pd.read_sql("""SELECT fecha as 'Fecha', peso as 'Peso (kg)', 
+                                      talla as 'Talla (cm)', imc as 'IMC', ronda as 'Ronda' 
+                                      FROM crecimiento WHERE dni=? ORDER BY fecha DESC""", 
+                                      conn, params=(dni_n,))
                 
-                if not df_historial.empty:
-                    st.table(df_historial)
-                    # Gráfico de evolución de peso
-                    st.line_chart(df_historial.set_index('Fecha')['Peso (kg)'])
+                if not df_hist.empty:
+                    st.dataframe(df_hist, use_container_width=True)
+                    
+                    # Gráfico comparativo de peso por fecha
+                    st.line_chart(df_hist.set_index('Fecha')['Peso (kg)'])
                 else:
-                    st.warning("No hay registros previos para este paciente.")
+                    st.warning("No existen mediciones previas para este paciente.")
         else:
-            st.error("⚠️ Acceso Denegado: El paciente no existe o pertenece a otro agente.")
+            st.error("⚠️ **Acceso Denegado:** El paciente no existe o no pertenece a su sector de trabajo/supervisión.")
         conn.close()
     else:
-        st.info("👋 Por favor, ingrese el DNI para gestionar el control nutricional.")
+        st.info("👋 Ingrese un DNI para comenzar la evaluación antropométrica.")
 # ==========================================
-# BLOQUE 6: TBC (CONTROL DE TRATAMIENTO Y CARNET)
+# BLOQUE 6: TBC (ESTRATEGIA DOTS Y RONDAS)
 # ==========================================
 def bloque_6_tbc():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    st.header(f"💊 Bloque 6: Control de Tratamiento TBC (Agente: {usuario_actual})")
+    rol_actual = st.session_state.get('rol_usuario', 'Agente')
+    ronda_actual_v, _ = obtener_ronda_info()
 
-    # Manual de usuario rápido
-    with st.expander("📖 Instrucciones TBC"):
+    st.header(f"💊 Bloque 6: Control de Tratamiento TBC - Ronda {ronda_actual_v}")
+
+    with st.expander("📖 Manual de Estrategia DOTS"):
         st.write("""
-        1. Ingrese el DNI para verificar si el paciente está bajo su supervisión.
-        2. El sistema calculará automáticamente la siguiente toma basada en el historial.
-        3. En el 'Carnet Digital' podrá ver el cumplimiento del tratamiento (DOTS).
+        - **DOTS:** El tratamiento debe ser supervisado por el agente sanitario.
+        - **Alertas:** El sistema marcará en rojo las tomas donde el paciente "Faltó".
+        - **Continuidad:** Si el paciente falta 2 días seguidos, informar inmediatamente al supervisor.
         """)
 
     dni_tbc = st.text_input("🔍 Ingrese DNI del Paciente en Tratamiento", key="busqueda_tbc")
 
     if dni_tbc:
-        conn = sqlite3.connect('aps_oran_final.db')
-        # Privacidad: Solo pacientes cargados por el usuario
-        persona = pd.read_sql("SELECT nombre FROM integrantes WHERE dni=? AND registrado_por=?", 
-                             conn, params=(dni_tbc, usuario_actual))
+        conn = obtener_conexion()
+        
+        # --- FILTRO DE JERARQUÍA ---
+        if rol_actual == "Supervisor":
+            equipo = obtener_equipo_agentes(usuario_actual)
+            placeholders = ', '.join(['?'] * len(equipo))
+            query_t = f"SELECT nombre, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
+            params = [dni_tbc] + equipo
+        elif rol_actual == "Administrador":
+            query_t = "SELECT nombre, registrado_por FROM integrantes WHERE dni=?"
+            params = [dni_tbc]
+        else:
+            query_t = "SELECT nombre, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
+            params = [dni_tbc, usuario_actual]
+
+        persona = pd.read_sql(query_t, conn, params=params)
         
         if not persona.empty:
-            st.subheader(f"👤 Paciente: {persona['nombre'].iloc[0]}")
+            nombre_p = persona['nombre'].iloc[0]
+            agente_p = persona['registrado_por'].iloc[0]
+            st.subheader(f"👤 Paciente: {nombre_p}")
+            st.caption(f"Bajo responsabilidad de: {agente_p}")
             
-            tab_registro, tab_carnet = st.tabs(["💊 Registro de Toma Diaria", "📋 Carnet de Tratamiento"])
+            tab_registro, tab_carnet = st.tabs(["💊 Registrar Toma Diaria", "📋 Carnet de Tratamiento"])
 
             with tab_registro:
-                # Intentamos obtener la última toma registrada para ayudar al agente
+                # Sugerencia automática de la siguiente toma
                 ultimo_reg = pd.read_sql("""SELECT fase, toma FROM tbc WHERE dni=? 
-                                         ORDER BY fecha_muestra DESC, toma DESC LIMIT 1""", 
-                                         conn, params=(dni_tbc,))
+                                         ORDER BY rowid DESC LIMIT 1""", conn, params=(dni_tbc,))
                 
-                sugerencia_fase = ultimo_reg['fase'].iloc[0] if not ultimo_reg.empty else "Primera (60 días)"
-                sugerencia_toma = int(ultimo_reg['toma'].iloc[0] + 1) if not ultimo_reg.empty else 1
+                sug_fase = ultimo_reg['fase'].iloc[0] if not ultimo_reg.empty else "Primera (60 días)"
+                sug_toma = int(ultimo_reg['toma'].iloc[0] + 1) if not ultimo_reg.empty else 1
 
-                with st.form("form_tbc_diario"):
+                with st.form("form_tbc_diario", clear_on_submit=True):
                     col1, col2 = st.columns(2)
                     fase = col1.selectbox("Fase Actual", ["Primera (60 días)", "Segunda (30 días)"], 
-                                         index=0 if sugerencia_fase == "Primera (60 días)" else 1)
-                    toma = col2.number_input("Toma N°", min_value=1, value=sugerencia_toma)
+                                         index=0 if sug_fase == "Primera (60 días)" else 1)
+                    toma = col2.number_input("Toma N°", min_value=1, value=sug_toma)
                     
                     c3, c4 = st.columns(2)
                     fecha_toma = c3.date_input("Fecha de la Toma", value=date.today())
-                    estado = c4.selectbox("Condición de la Toma", ["Supervisada (DOTS)", "No Supervisada", "Faltó"])
+                    estado = c4.selectbox("Condición", ["Supervisada (DOTS)", "No Supervisada", "Faltó"])
 
-                    if st.form_submit_button("💾 Registrar Toma"):
+                    if st.form_submit_button("💾 Guardar Registro de Toma"):
                         try:
-                            conn.execute("""INSERT INTO tbc (dni, tipo, fase, toma, fecha_muestra, estado, registrado_por) 
-                                         VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                                        (dni_tbc, "Tratamiento Estándar", fase, toma, str(fecha_toma), estado, usuario_actual))
+                            conn.execute("""INSERT INTO tbc (dni, tipo, fase, toma, fecha_muestra, estado, registrado_por, ronda) 
+                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                                        (dni_tbc, "Tratamiento Estándar", fase, toma, str(fecha_toma), estado, usuario_actual, ronda_actual_v))
                             conn.commit()
-                            st.success(f"✅ Toma N° {toma} registrada correctamente.")
+                            st.success(f"✅ Toma N° {toma} registrada.")
                             st.rerun()
                         except sqlite3.OperationalError:
-                            conn.execute("ALTER TABLE tbc ADD COLUMN registrado_por TEXT")
+                            conn.execute("ALTER TABLE tbc ADD COLUMN ronda TEXT")
                             conn.commit()
-                            st.info("Actualizando base de datos... Reintente el registro.")
+                            st.info("Actualizando tabla... Intente de nuevo.")
 
             with tab_carnet:
-                st.markdown("### 📜 Registro Histórico de Tomas")
+                st.markdown("### 📜 Historial de Cumplimiento")
                 df_tbc = pd.read_sql("""SELECT fecha_muestra as 'Fecha', fase as 'Fase', 
-                                     toma as 'N° Toma', estado as 'Estado' 
-                                     FROM tbc WHERE dni=? ORDER BY fecha_muestra DESC""", 
-                                     conn, params=(dni_tbc,))
+                                     toma as 'N° Toma', estado as 'Estado', ronda as 'Ronda'
+                                     FROM tbc WHERE dni=? ORDER BY toma DESC""", conn, params=(dni_tbc,))
                 
                 if not df_tbc.empty:
-                    # Aplicamos colores al carnet digital
-                    def color_estado(val):
-                        if val == "Supervisada (DOTS)": return 'background-color: #d4edda'
-                        if val == "Faltó": return 'background-color: #f8d7da'
+                    # Estilo visual para detectar inasistencias rápido
+                    def color_tbc(val):
+                        if val == "Supervisada (DOTS)": return 'color: #155724; background-color: #d4edda'
+                        if val == "Faltó": return 'color: #721c24; background-color: #f8d7da'
                         return ''
 
-                    st.dataframe(df_tbc.style.applymap(color_estado, subset=['Estado']), use_container_width=True)
+                    st.dataframe(df_tbc.style.applymap(color_tbc, subset=['Estado']), use_container_width=True)
                     
-                    # Progreso visual
-                    total_tomas = len(df_tbc[df_tbc['Estado'] != "Faltó"])
-                    st.metric("Total Tomas Realizadas", total_tomas)
+                    # Métricas de adherencia
+                    total_tomas = len(df_tbc)
+                    exitosas = len(df_tbc[df_tbc['Estado'] == "Supervisada (DOTS)"])
+                    st.metric("Adherencia (Tomas Supervisadas)", f"{exitosas}/{total_tomas}")
                 else:
-                    st.warning("No hay tomas registradas para este paciente.")
+                    st.warning("No hay tomas registradas.")
         else:
-            st.error("⚠️ Acceso Denegado o DNI no encontrado en sus registros.")
+            st.error("⚠️ Acceso denegado o DNI no registrado en su área/equipo.")
         conn.close()
     else:
-        st.info("👋 Ingrese el DNI para gestionar el tratamiento TBC.")
+        st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: CONTROL POBLACIONAL (TABLA/PDF)
+# BLOQUE 7: CONTROL POBLACIONAL (ESTADÍSTICAS)
 # ==========================================
 def bloque_7_estadistica():
-    # Recuperamos el usuario y su rol
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Agente') 
 
-    st.header(f"📊 Bloque 7: Control Poblacional (Vista: {usuario_actual})")
+    st.header(f"📊 Bloque 7: Control Poblacional (Vista: {rol_actual})")
     
-    conn = sqlite3.connect('aps_oran_final.db')
+    conn = obtener_conexion()
     
-    # Lógica de Privacidad: El Admin ve todo, el Agente solo lo suyo
+    # --- LÓGICA DE PRIVACIDAD Y JERARQUÍA ---
     if rol_actual == "Administrador":
         query = "SELECT f_nac, sexo FROM integrantes"
-        df = pd.read_sql(query, conn)
+        params = ()
+    elif rol_actual == "Supervisor":
+        equipo = obtener_equipo_agentes(usuario_actual)
+        placeholders = ', '.join(['?'] * len(equipo))
+        query = f"SELECT f_nac, sexo FROM integrantes WHERE registrado_por IN ({placeholders})"
+        params = equipo
     else:
         query = "SELECT f_nac, sexo FROM integrantes WHERE registrado_por = ?"
-        df = pd.read_sql(query, conn, params=(usuario_actual,))
+        params = (usuario_actual,)
+
+    df = pd.read_sql(query, conn, params=params)
     conn.close()
 
     if not df.empty:
+        # 1. Procesamiento de Rangos Etarios (Exacto para APS)
         lista_rangos = [
             "0 a 5 meses", "6 a 11 meses", "1 año", "2 años", "3 años", 
             "4 años", "5 años", "6 años", "7 a 9 años", "10 años", 
@@ -686,15 +848,13 @@ def bloque_7_estadistica():
 
         def clasificar_exacto(f_nac_str):
             try:
-                # Adaptado para formato YYYY-MM-DD del Bloque 1
                 nac = datetime.strptime(f_nac_str, '%Y-%m-%d').date()
                 hoy = date.today()
                 anios = hoy.year - nac.year - ((hoy.month, hoy.day) < (nac.month, nac.day))
                 meses = (hoy.year - nac.year) * 12 + hoy.month - nac.month
                 if hoy.day < nac.day: meses -= 1
 
-                if anios == 0:
-                    return "0 a 5 meses" if meses <= 5 else "6 a 11 meses"
+                if anios == 0: return "0 a 5 meses" if meses <= 5 else "6 a 11 meses"
                 if anios == 1: return "1 año"
                 if anios in [2,3,4,5,6]: return f"{anios} años"
                 if 7 <= anios <= 9: return "7 a 9 años"
@@ -716,211 +876,171 @@ def bloque_7_estadistica():
 
         df['Rango'] = df['f_nac'].apply(clasificar_exacto)
 
-        # Construcción de la Matriz
+        # 2. Construcción de la Matriz Consolidada
         resumen = pd.DataFrame(index=lista_rangos, columns=['M', 'F']).fillna(0)
+        # Normalizamos sexo a 'M' y 'F' por si acaso
+        df['sexo'] = df['sexo'].map({'Masculino': 'M', 'Femenino': 'F', 'M': 'M', 'F': 'F'})
         conteo = df.groupby(['Rango', 'sexo']).size().unstack(fill_value=0)
         
         for r in conteo.index:
             if r in resumen.index:
-                if 'M' in conteo.columns: resumen.at[r, 'M'] = conteo.at[r, 'M']
-                if 'F' in conteo.columns: resumen.at[r, 'F'] = conteo.at[r, 'F']
+                for col in ['M', 'F']:
+                    if col in conteo.columns:
+                        resumen.at[r, col] = conteo.at[r, col]
         
         resumen['Total'] = resumen['M'] + resumen['F']
 
-        # Visualización
-        st.subheader("📋 Consolidado de Población")
+        # 3. Visualización con Gráficos
+        st.subheader("📋 Consolidado Poblacional por Edad y Sexo")
         st.table(resumen.astype(int))
 
-        # Gráfico interactivo
-        df_plot = resumen.reset_index().melt(id_vars='index', value_vars=['M', 'F'], 
-                                            var_name='Sexo', value_name='Cantidad')
-        df_plot.columns = ['Rango', 'Sexo', 'Cantidad']
-        
-        fig = px.bar(df_plot, x='Rango', y='Cantidad', color='Sexo', 
-                     barmode='group', title=f"Pirámide Poblacional - Sector {usuario_actual}",
-                     color_discrete_map={'M': '#3498DB', 'F': '#E74C3C'})
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Distribución por Género")
+            fig_sexo = px.pie(df, names='sexo', color='sexo', 
+                             color_discrete_map={'M':'#3498DB', 'F':'#E74C3C'},
+                             hole=0.4)
+            st.plotly_chart(fig_sexo, use_container_width=True)
 
-        # Generador de PDF (optimizado para no fallar por caracteres especiales)
+        with col2:
+            st.subheader("Pirámide Poblacional")
+            df_plot = resumen.reset_index().melt(id_vars='index', value_vars=['M', 'F'], 
+                                               var_name='Sexo', value_name='Cantidad')
+            df_plot.columns = ['Rango', 'Sexo', 'Cantidad']
+            fig_bar = px.bar(df_plot, x='Rango', y='Cantidad', color='Sexo', barmode='group',
+                            color_discrete_map={'M': '#3498DB', 'F': '#E74C3C'})
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        # 4. Generación de Reporte PDF
         def crear_pdf_aps(datos):
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", 'B', 16)
             pdf.cell(200, 10, "INFORME APS - ORAN 2026", ln=True, align='C')
             pdf.set_font("Arial", size=12)
-            pdf.cell(200, 10, f"Agente: {usuario_actual} | Fecha: {date.today()}", ln=True, align='C')
+            pdf.cell(200, 10, f"Responsable: {usuario_actual} | Rol: {rol_actual}", ln=True, align='C')
+            pdf.cell(200, 10, f"Fecha de emision: {date.today()}", ln=True, align='C')
             pdf.ln(10)
             
-            # Tabla PDF
-            pdf.set_fill_color(230, 230, 230)
+            # Encabezados de tabla
+            pdf.set_fill_color(52, 152, 219)
+            pdf.set_text_color(255, 255, 255)
             pdf.cell(60, 10, "Rango de Edad", 1, 0, 'C', True)
             pdf.cell(40, 10, "Masc (M)", 1, 0, 'C', True)
             pdf.cell(40, 10, "Fem (F)", 1, 0, 'C', True)
             pdf.cell(40, 10, "Total", 1, 1, 'C', True)
             
+            pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", size=10)
             for i, r in datos.iterrows():
                 pdf.cell(60, 8, str(i), 1)
                 pdf.cell(40, 8, str(int(r['M'])), 1, 0, 'C')
                 pdf.cell(40, 8, str(int(r['F'])), 1, 0, 'C')
                 pdf.cell(40, 8, str(int(r['Total'])), 1, 1, 'C')
+            
+            # Pie de página
+            pdf.ln(10)
+            pdf.set_font("Arial", 'I', 8)
+            pdf.cell(0, 10, "Documento generado automaticamente por el Sistema Digital de APS Oran.", 0, 0, 'C')
                 
             return pdf.output(dest='S').encode('latin-1', 'replace')
 
-        if st.button("📥 Generar Reporte PDF Oficial"):
-            pdf_bytes = crear_pdf_aps(resumen)
-            st.download_button("Descargar Archivo PDF", pdf_bytes, f"reporte_{usuario_actual}.pdf", "application/pdf")
+        st.divider()
+        if st.button("📥 Generar Reporte PDF Oficial para Supervisor"):
+            with st.spinner("Compilando datos..."):
+                pdf_bytes = crear_pdf_aps(resumen)
+                st.download_button(
+                    label="💾 Descargar Archivo PDF",
+                    data=pdf_bytes,
+                    file_name=f"informe_poblacional_{usuario_actual}_{date.today()}.pdf",
+                    mime="application/pdf"
+                )
 
     else:
-        st.warning(f"No hay registros cargados por el usuario {usuario_actual}.")
-def bloque_7_estadistica():
-    st.header("📊 Bloque 7: Control Poblacional y Estadísticas")
+        st.warning(f"No hay registros cargados para la vista de {usuario_actual}.")
+# ==========================================
+# BLOQUE 8: VISTA ESTRATÉGICA (SUPERVISOR)
+# ==========================================
+def bloque_8_supervisor():
+    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
+    rol_actual = st.session_state.get('rol_usuario', 'Supervisor')
+    ronda_act, _ = obtener_ronda_info()
+    
+    st.header(f"🏛️ Panel de Control de Supervisión - Ronda {ronda_act}")
     
     conn = obtener_conexion()
-    try:
-        # Consulta para traer los datos necesarios
-        query = "SELECT f_nac, sexo FROM integrantes"
-        df = pd.read_sql(query, conn)
-        
-        # Verificamos si hay datos antes de intentar graficar
-        if df.empty:
-            st.info("ℹ️ No hay datos cargados en el sistema. Registre integrantes en el Bloque 1 para ver las estadísticas.")
-        else:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Distribución por Sexo")
-                # Mantenemos el gráfico de torta que tenías
-                fig_sexo = px.pie(df, names='sexo', color='sexo',
-                                 color_discrete_map={'Masculino':'#1B5E20', 'Femenino':'#4CAF50', 'M':'#1B5E20', 'F':'#4CAF50'})
-                st.plotly_chart(fig_sexo, use_container_width=True)
-            
-            with col2:
-                st.subheader("Pirámide de Población (Conteos)")
-                # Mantenemos el gráfico de barras actual
-                st.bar_chart(df['sexo'].value_counts())
-                st.write("Resumen numérico:", df['sexo'].value_counts())
-
-    except Exception as e:
-        # En caso de que la tabla no exista o haya un error de base de datos
-        st.error("⚠️ La base de datos aún no está lista o la tabla 'integrantes' no tiene registros.")
-    finally:
-        conn.close()
-# ==========================================
-# BLOQUE 8: GRÁFICAS Y MAPAS (ANÁLISIS DE RIESGO)
-# ==========================================
-def bloque_8_mapas():
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Agente')
     
-    st.header(f"📈 Bloque 8: Análisis de Riesgo Georeferenciado")
-    st.caption(f"Visualizando datos cargados por: {usuario_actual}")
-
-    conn = sqlite3.connect('aps_oran_final.db')
+    # 1. Obtener el equipo a cargo
+    equipo = obtener_equipo_agentes(usuario_actual)
+    placeholders = ', '.join(['?'] * len(equipo))
     
-    # Consulta avanzada: Cruzamos integrantes con TBC, Embarazo y Nutrición
-    # Filtramos por usuario para que cada agente gestione su sector
-    query = """
-    SELECT i.dni, i.nombre, i.latitud, i.longitud, i.registrado_por,
-           e.dni as es_embarazada, 
-           c.imc,
-           t.estado as tbc_estado
+    # 2. Query Consolidada del Equipo
+    query = f"""
+    SELECT i.dni, i.registrado_por as agente, i.f_nac, i.latitud, i.longitud,
+           e.ronda as ronda_emb, 
+           c.imc, c.ronda as ronda_nut,
+           t.estado as tbc_est, t.ronda as ronda_tbc
     FROM integrantes i
-    LEFT JOIN (SELECT DISTINCT dni FROM controles_embarazo) e ON i.dni = e.dni
-    LEFT JOIN (SELECT dni, imc FROM crecimiento GROUP BY dni HAVING MAX(fecha)) c ON i.dni = c.dni
-    LEFT JOIN (SELECT dni, estado FROM tbc GROUP BY dni HAVING MAX(fecha_muestra)) t ON i.dni = t.dni
+    LEFT JOIN (SELECT dni, ronda FROM controles_embarazo) e ON i.dni = e.dni
+    LEFT JOIN (SELECT dni, imc, ronda FROM crecimiento GROUP BY dni HAVING MAX(fecha)) c ON i.dni = c.dni
+    LEFT JOIN (SELECT dni, estado, ronda FROM tbc GROUP BY dni HAVING MAX(fecha_muestra)) t ON i.dni = t.dni
+    WHERE i.registrado_por IN ({placeholders})
     """
     
-    if rol_actual == "Administrador":
-        df = pd.read_sql(query, conn)
-    else:
-        df = pd.read_sql(query + " WHERE i.registrado_por = ?", conn, params=(usuario_actual,))
+    df = pd.read_sql(query, conn, params=equipo)
     conn.close()
 
-    if not df.empty:
-        # 1. CLASIFICACIÓN DE RIESGO MEJORADA
-        def definir_categoria(row):
-            if row['tbc_estado'] == 'Activo': return '🔴 Riesgo Infectológico (TBC)'
-            if row['es_embarazada'] is not None: return '🟣 Seguimiento Materno'
-            if row['imc'] is not None:
-                if row['imc'] < 18.5: return '🟠 Riesgo Nutricional (Bajo Peso)'
-                if row['imc'] > 30.0: return '🟡 Riesgo Crónico (Obesidad)'
-            return '🟢 Control de Rutina'
+    if df.empty:
+        st.warning("No hay datos cargados por los agentes de su equipo.")
+        return
 
-        df['Riesgo'] = df.apply(definir_categoria, axis=1)
+    # --- MÉTRICAS GLOBALES DEL EQUIPO ---
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Población Total", len(df))
+    c2.metric("Embarazadas (Ronda)", len(df[df['ronda_emb'] == ronda_act]))
+    c3.metric("Casos TBC", len(df[df['tbc_est'].notnull()]))
+    c4.metric("Bajo Peso", len(df[df['imc'] < 18.5]))
 
-        # 2. FILTRADO GPS
-        df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)].dropna(subset=['latitud', 'longitud'])
+    # --- COMPARATIVA ENTRE AGENTES (ESTADÍSTICA DE DESEMPEÑO) ---
+    st.subheader("📊 Cobertura por Agente Sanitario")
+    st.caption("Cantidad de controles realizados en la ronda actual por cada integrante del equipo.")
+    
+    # Agrupamos por agente y contamos actividades en la ronda actual
+    df_actual = df[(df['ronda_emb'] == ronda_act) | (df['ronda_nut'] == ronda_act) | (df['ronda_tbc'] == ronda_act)]
+    desempeno = df_actual.groupby('agente').size().reset_index(name='Total Actividades')
+    
+    fig_agentes = px.bar(desempeno, x='agente', y='Total Actividades', 
+                        color='Total Actividades', 
+                        title=f"Actividades registradas en Ronda {ronda_act}",
+                        color_continuous_scale='Viridis')
+    st.plotly_chart(fig_agentes, use_container_width=True)
 
-        if not df_mapa.empty:
-            # Layout de Dashboard
-            col_map, col_stats = st.columns([2, 1])
-
-            with col_map:
-                st.subheader("🗺️ Mapa Epidemiológico del Sector")
-                color_map = {
-                    '🔴 Riesgo Infectológico (TBC)': '#FF0000',
-                    '🟣 Seguimiento Materno': '#800080',
-                    '🟠 Riesgo Nutricional (Bajo Peso)': '#FFA500',
-                    '🟡 Riesgo Crónico (Obesidad)': '#FFFF00',
-                    '🟢 Control de Rutina': '#008000'
-                }
-
-                fig_map = px.scatter_mapbox(
-                    df_mapa, lat="latitud", lon="longitud", color="Riesgo",
-                    hover_name="nombre", 
-                    hover_data={"latitud": False, "longitud": False, "dni": True, "Riesgo": True},
-                    color_discrete_map=color_map,
-                    zoom=13, height=600, mapbox_style="carto-positron"
-                )
-                fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-                st.plotly_chart(fig_map, use_container_width=True)
-
-            with col_stats:
-                st.subheader("📊 Resumen de Alertas")
-                conteo = df['Riesgo'].value_counts().reset_index()
-                conteo.columns = ['Categoría', 'Casos']
-                
-                # Gráfico de Torta pequeño
-                fig_pie = px.pie(conteo, values='Casos', names='Categoría', 
-                                 color='Categoría', color_discrete_map=color_map,
-                                 hole=0.4)
-                fig_pie.update_layout(showlegend=False, height=300)
-                st.plotly_chart(fig_pie, use_container_width=True)
-                
-                st.table(conteo)
-
-            # 3. LISTA DE ACCIÓN PRIORITARIA
-            st.divider()
-            st.subheader("🚨 Prioridades de Visita Domiciliaria")
-            prioritarios = df[df['Riesgo'].str.contains('🔴|🟣|🟠')]
-            if not prioritarios.empty:
-                st.dataframe(prioritarios[['nombre', 'dni', 'Riesgo']], use_container_width=True)
-            else:
-                st.success("✅ No hay casos de riesgo crítico pendientes en este sector.")
-
-            # 4. EXPORTACIÓN
-            if st.button("📥 Exportar Planilla de Visitas (PDF)"):
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(200, 10, f"HOJA DE RUTA - AGENTE: {usuario_actual}", ln=True, align='C')
-                pdf.set_font("Arial", size=10)
-                pdf.cell(200, 10, f"Fecha: {date.today()}", ln=True, align='C')
-                pdf.ln(5)
-                
-                for _, r in prioritarios.iterrows():
-                    pdf.multi_cell(0, 10, f"- {r['nombre']} (DNI: {r['dni']}): {r['Riesgo']}", border=1)
-                
-                pdf_bytes = pdf.output(dest='S').encode('latin-1', 'replace')
-                st.download_button("Descargar PDF para Terreno", pdf_bytes, "hoja_ruta.pdf", "application/pdf")
-
+    # --- MAPA DE CALOR EPIDEMIOLÓGICO ---
+    st.subheader("📍 Mapa de Riesgo por Agente")
+    
+    # Coloreamos por agente para ver qué zonas están cubiertas por quién
+    df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)]
+    
+    if not df_mapa.empty:
+        fig_mapa_sup = px.scatter_mapbox(
+            df_mapa, lat="latitud", lon="longitud", color="agente",
+            hover_name="agente", zoom=12, height=500,
+            mapbox_style="carto-positron",
+            title="Distribución Geográfica por Responsable de Sector"
+        )
+        st.plotly_chart(fig_mapa_sup, use_container_width=True)
+    
+    # --- ALERTAS DE CRÍTICOS (TABLA DE ACCIÓN) ---
+    st.divider()
+    st.subheader("🚨 Casos Críticos del Equipo")
+    with st.expander("Ver lista de pacientes con Bajo Peso o TBC Activo"):
+        criticos = df[(df['imc'] < 18.5) | (df['tbc_est'] == 'Activo')]
+        if not criticos.empty:
+            st.table(criticos[['dni', 'agente', 'imc', 'tbc_est']])
         else:
-            st.warning("📍 No hay puntos GPS cargados. Asegúrese de capturar coordenadas en el Bloque 1.")
-    else:
-        st.info("No hay datos disponibles para este usuario.")
+            st.success("No se detectan casos críticos en el equipo actualmente.")
 # ==========================================
-# BLOQUE 9: ADMINISTRACIÓN Y SEGURIDAD
+# BLOQUE 9: ADMINISTRACIÓN, SEGURIDAD Y EQUIPOS
 # ==========================================
 import hashlib
 
@@ -928,33 +1048,32 @@ def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
 def bloque_9_admin():
-    # Solo el Administrador debería ver la gestión de usuarios completa
     rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
 
-    st.header("⚙️ Configuración y Seguridad")
+    st.header("⚙️ Configuración y Gestión de Equipos")
     
-    # --- MANUAL DE USUARIO INTEGRADO (Solicitado) ---
-    with st.expander("📖 Manual de Usuario - Gestión de Seguridad"):
+    # --- MANUAL DE USUARIO INTEGRADO ---
+    with st.expander("📖 Manual de Usuario - Seguridad y Jerarquías"):
         st.markdown("""
-        ### Instrucciones:
-        1. **Cambio de Clave:** Se recomienda actualizar su contraseña cada 3 meses.
-        2. **Alta de Personal:** Solo disponible para roles de 'Administrador'. Asegúrese de asignar el ID de usuario correctamente.
-        3. **Privacidad:** Recuerde que cada registro que realice quedará vinculado a su nombre de usuario.
+        ### Gestión de Seguridad:
+        1. **Cambio de Clave:** Por política de seguridad de APS Orán, se recomienda actualizar su contraseña cada 3 meses desde la pestaña 'Mi Cuenta'.
+        2. **Jerarquías:** El Administrador debe asignar cada Agente a un Supervisor para que los reportes consolidados funcionen.
+        3. **Auditoría:** Todas las acciones (altas, bajas, modificaciones) quedan registradas con el ID del usuario activo.
         """)
 
-    # Pestañas de gestión
+    # Pestañas según Rol
     pestanas = ["🔑 Mi Cuenta"]
     if rol_actual == "Administrador":
-        pestanas.extend(["👥 Gestionar Personal", "📜 Lista de Usuarios"])
+        pestanas.extend(["👥 Gestionar Personal", "🔗 Asignar Equipos", "📜 Lista de Usuarios"])
     
     tabs = st.tabs(pestanas)
 
-    # TAREA 1: CAMBIO DE CONTRASEÑA (Para todos)
+    # TAREA 1: MI CUENTA (Cambio de contraseña para todos)
     with tabs[0]:
-        st.subheader("Cambio de Contraseña")
+        st.subheader("Configuración de Seguridad")
         with st.form("form_cambio_pass"):
-            st.info(f"Usuario activo: **{usuario_actual}**")
+            st.info(f"Usuario: **{usuario_actual}**")
             old_p = st.text_input("Contraseña Actual", type="password")
             new_p = st.text_input("Nueva Contraseña", type="password")
             conf_p = st.text_input("Confirmar Nueva Contraseña", type="password")
@@ -962,8 +1081,10 @@ def bloque_9_admin():
             if st.form_submit_button("🔄 Actualizar Mi Clave"):
                 if new_p != conf_p:
                     st.error("Las nuevas contraseñas no coinciden.")
+                elif len(new_p) < 6:
+                    st.warning("La clave debe tener al menos 6 caracteres.")
                 else:
-                    conn = sqlite3.connect('aps_oran_final.db')
+                    conn = obtener_conexion()
                     check = pd.read_sql("SELECT * FROM usuarios WHERE usuario=? AND password=?", 
                                       conn, params=(usuario_actual, hash_password(old_p)))
                     if not check.empty:
@@ -978,97 +1099,170 @@ def bloque_9_admin():
     # TAREA 2: ALTA DE USUARIOS (Solo Admin)
     if rol_actual == "Administrador":
         with tabs[1]:
-            st.subheader("Registrar Nuevo Personal de APS")
+            st.subheader("Registrar Nuevo Personal")
             with st.form("registro_seguridad"):
-                u_id = st.text_input("ID de Usuario (ej: j.perez)")
-                u_nom = st.text_input("Nombre Completo")
-                u_rol = st.selectbox("Rol en el Sistema", ["Agente Sanitario", "Supervisor", "Administrador"])
-                u_pass = st.text_input("Contraseña Temporal", type="password")
+                u_id = st.text_input("ID de Usuario (ej: m.gomez)")
+                u_nom = st.text_input("Nombre y Apellido")
+                u_rol = st.selectbox("Rol", ["Agente Sanitario", "Supervisor", "Administrador"])
+                u_pass = st.text_input("Contraseña Inicial", type="password")
                 
                 if st.form_submit_button("➕ Crear Cuenta"):
                     if u_id and u_pass:
-                        conn = sqlite3.connect('aps_oran_final.db')
+                        conn = obtener_conexion()
                         try:
                             conn.execute("INSERT INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)",
                                         (u_id, u_nom, u_rol, hash_password(u_pass)))
                             conn.commit()
-                            st.success(f"✅ Usuario {u_id} registrado con éxito.")
+                            st.success(f"✅ Usuario {u_id} creado.")
                         except:
-                            st.error("El ID de usuario ya existe.")
+                            st.error("Error: El ID ya existe o faltan datos.")
                         finally:
                             conn.close()
 
+        # TAREA 3: ASIGNACIÓN DE EQUIPOS (Lo solicitado: Solo Admin)
         with tabs[2]:
-            st.subheader("Personal Registrado")
-            conn = sqlite3.connect('aps_oran_final.db')
-            df_u = pd.read_sql("SELECT usuario, nombre, rol FROM usuarios", conn)
-            st.dataframe(df_u, use_container_width=True)
+            st.subheader("🔗 Vinculación Agente-Supervisor")
+            st.caption("Seleccione qué Agentes Sanitarios estarán bajo la supervisión de quién.")
+            
+            conn = obtener_conexion()
+            # Obtenemos listas de la DB
+            supervisores = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)['usuario'].tolist()
+            agentes = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Agente Sanitario'", conn)['usuario'].tolist()
+            
+            with st.form("form_equipos"):
+                super_sel = st.selectbox("Seleccionar Supervisor", supervisores)
+                agentes_sel = st.multiselect("Seleccionar Agentes a Cargo", agentes)
+                
+                if st.form_submit_button("🔗 Guardar Equipo"):
+                    try:
+                        # Primero limpiamos asignaciones previas para este supervisor si se desea reasignar
+                        # O simplemente agregamos el supervisor_id a la tabla de usuarios
+                        for ag in agentes_sel:
+                            conn.execute("UPDATE usuarios SET supervisor_id=? WHERE usuario=?", (super_sel, ag))
+                        conn.commit()
+                        st.success(f"✅ Equipo asignado al Supervisor {super_sel}")
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
+                        conn.commit()
+                        st.info("Estructura actualizada. Reintente la asignación.")
             conn.close()
 
+        with tabs[3]:
+            st.subheader("Personal de APS Orán")
+            conn = obtener_conexion()
+            df_u = pd.read_sql("SELECT usuario, nombre, rol, supervisor_id as 'Supervisor Cargo' FROM usuarios", conn)
+            st.dataframe(df_u, use_container_width=True)
+            conn.close()
 # ==========================================
-# NAVEGACIÓN PRINCIPAL (ACTUALIZADA)
+# NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
 def main():
-    # Inicialización de estado
-    if "auth" not in st.session_state: st.session_state["auth"] = False
-    if "usuario_logueado" not in st.session_state: st.session_state["usuario_logueado"] = None
+    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
+
+    if "auth" not in st.session_state: 
+        st.session_state["auth"] = False
+    if "nombre_agente" not in st.session_state: 
+        st.session_state["nombre_agente"] = "Usuario"
 
     if not st.session_state["auth"]:
         # --- PANTALLA DE LOGIN ---
-        st.markdown("<h1 style='text-align: center;'>SISTEMA APS - ORÁN 2026</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>🏥 SISTEMA APS - ORÁN</h1>", unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns([1,2,1])
+        col1, col2, col3 = st.columns([1,1.5,1])
         with col2:
             with st.form("login"):
-                u = st.text_input("Usuario")
+                u = st.text_input("ID de Usuario")
                 p = st.text_input("Contraseña", type="password")
-                if st.form_submit_button("🚀 Ingresar al Sistema"):
-                    # Verificación contra DB
-                    conn = sqlite3.connect('aps_oran_final.db')
-                    res = pd.read_sql("SELECT * FROM usuarios WHERE usuario=? AND password=?", 
-                                    conn, params=(u, hash_password(p)))
+                if st.form_submit_button("🚀 Ingresar"):
+                    conn = obtener_conexion()
+                    # Modificamos la consulta para traer el NOMBRE real
+                    query = "SELECT nombre, rol FROM usuarios WHERE usuario=? AND password=?"
+                    res = pd.read_sql(query, conn, params=(u, hash_password(p)))
                     conn.close()
 
-                    # Bypass para primer ingreso admin
-                    if not res.empty or (u == "admin" and p == "oran2026"):
+                    if not res.empty:
                         st.session_state["auth"] = True
                         st.session_state["usuario_logueado"] = u
-                        st.session_state["rol_usuario"] = res['rol'].iloc[0] if not res.empty else "Administrador"
+                        # GUARDAMOS EL NOMBRE REAL
+                        st.session_state["nombre_agente"] = res['nombre'].iloc[0]
+                        st.session_state["rol_usuario"] = res['rol'].iloc[0]
+                        st.rerun()
+                    elif u == "admin" and p == "oran2026":
+                        st.session_state["auth"] = True
+                        st.session_state["usuario_logueado"] = "admin"
+                        st.session_state["nombre_agente"] = "Administrador Central"
+                        st.session_state["rol_usuario"] = "Administrador"
                         st.rerun()
                     else:
                         st.error("Credenciales incorrectas")
+    
     else:
-        # --- MENU PRINCIPAL ---
-        st.sidebar.title(f"📍 Sector: Orán")
-        st.sidebar.write(f"Usuario: **{st.session_state['usuario_logueado']}**")
+        # --- BARRA LATERAL (SIDEBAR) ---
+        # 1. Mostrar NOMBRE REAL en lugar de ID
+        st.sidebar.title(f"👋 Bienvenido/a")
+        st.sidebar.subheader(st.session_state["nombre_agente"])
+        st.sidebar.caption(f"Rol: {st.session_state['rol_usuario']}")
+        st.sidebar.divider()
+
+        # 2. LISTA DE PRIORIDAD DE VISITA (Casas en Riesgo)
+        st.sidebar.subheader("🚨 Prioridades de Visita")
+        conn = obtener_conexion()
+        usuario = st.session_state["usuario_logueado"]
         
-        menu = st.sidebar.radio("Navegación:", 
-            ["Panel de Control", "1. Censo", "2. Materno", "3. Vivienda", "4. Vacunas", "5. Nutrición", "6. TBC", "7. Estadísticas", "8. Mapas", "9. Admin"])
+        # Buscamos personas en riesgo en el sector de este agente
+        query_prioridades = """
+            SELECT i.nombre, i.dni 
+            FROM integrantes i
+            LEFT JOIN controles_embarazo e ON i.dni = e.dni
+            LEFT JOIN tbc t ON i.dni = t.dni
+            LEFT JOIN crecimiento c ON i.dni = c.dni
+            WHERE i.registrado_por = ? AND (
+                t.estado = 'Activo' OR 
+                e.dni IS NOT NULL OR 
+                c.imc < 18.5
+            )
+            GROUP BY i.dni LIMIT 5
+        """
+        try:
+            prioridades = pd.read_sql(query_prioridades, conn, params=(usuario,))
+            if not prioridades.empty:
+                for idx, row in prioridades.iterrows():
+                    st.sidebar.warning(f"📍 **{row['nombre']}**\n(DNI: {row['dni']})")
+            else:
+                st.sidebar.success("✅ Sin visitas críticas pendientes.")
+        except:
+            st.sidebar.info("Cargue datos para ver prioridades.")
+        conn.close()
+
+        st.sidebar.divider()
+        
+        # Menú de Navegación
+        opciones = [
+            "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+            "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+            "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin"
+        ]
+        menu = st.sidebar.radio("Navegación:", opciones)
         
         if st.sidebar.button("🚪 Cerrar Sesión"):
             st.session_state["auth"] = False
             st.rerun()
 
-        # Ruteo de Bloques
-        if menu == "Panel de Control": bloque_0_dashboard()
-        elif menu == "1. Censo": bloque_1_censo()
-        elif menu == "2. Materno": bloque_2_materno()
-        elif menu == "3. Vivienda": bloque_3_vivienda()
-        elif menu == "4. Vacunas": bloque_4_vacunas()
-        elif menu == "5. Nutrición": bloque_5_nutricion()
-        elif menu == "6. TBC": bloque_6_tbc()
-        elif menu == "7. Estadísticas": bloque_7_estadistica()
-        elif menu == "8. Mapas": bloque_8_mapas()
-        elif menu == "9. Admin": bloque_9_admin()
+        # --- RUTEADOR ---
+        if "Panel" in menu: bloque_0_dashboard()
+        elif "1. Censo" in menu: bloque_1_censo()
+        elif "2. Materno" in menu: bloque_2_materno()
+        elif "3. Vivienda" in menu: bloque_3_vivienda()
+        elif "4. Vacunas" in menu: bloque_4_vacunas()
+        elif "5. Nutrición" in menu: bloque_5_nutricion()
+        elif "6. TBC" in menu: bloque_6_tbc()
+        elif "7. Estadísticas" in menu: bloque_7_estadistica()
+        elif "8. Mapas" in menu:
+            if st.session_state["rol_usuario"] in ["Supervisor", "Administrador"]:
+                bloque_8_supervisor()
+            else:
+                bloque_8_analisis_agente()
+        elif "9. Admin" in menu: bloque_9_admin()
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
