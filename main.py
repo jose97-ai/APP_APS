@@ -1004,6 +1004,36 @@ def inicializar_tablas_sistema():
 # BLOQUE 7: ESTADÍSTICAS DETALLADAS (APS)
 # ==========================================
 def bloque_7_estadisticas():
+    st.title("📊 Estadísticas y Reportes")
+    
+    # 1. Usamos la conexión que repara columnas faltantes
+    try:
+        conn = conectar_y_reparar() # Esta es la función que arregla las tablas
+        
+        # 2. Leemos los datos con un bloque de seguridad (Try/Except)
+        try:
+            df_personas = pd.read_sql("SELECT * FROM integrantes", conn)
+            df_viviendas = pd.read_sql("SELECT * FROM viviendas", conn)
+            df_vacunas = pd.read_sql("SELECT * FROM vacunas", conn)
+        except Exception as e:
+            st.warning(f"Aviso: Algunas tablas están vacías o en proceso de actualización.")
+            # Creamos dataframes vacíos para que los gráficos no rompan la app
+            df_personas = pd.DataFrame()
+            df_viviendas = pd.DataFrame()
+            df_vacunas = pd.DataFrame()
+
+        # --- AHORA TUS GRÁFICOS ---
+        if not df_personas.empty:
+            st.subheader("Censo por Ronda")
+            # Tu código de gráficos aquí...
+        else:
+            st.info("No hay datos cargados para generar estadísticas todavía.")
+            
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Error crítico en el módulo de estadísticas: {e}")
+def bloque_7_estadisticas():
     st.title("📊 Distribución Poblacional Detallada")
     
     conn = sqlite3.connect('aps_oran_final.db')
@@ -1503,6 +1533,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
