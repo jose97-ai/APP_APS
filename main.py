@@ -1000,149 +1000,128 @@ def inicializar_tablas_sistema():
     
     conn.commit()
     conn.close()
-# ==========================================
-# BLOQUE 7: ESTADÍSTICAS DETALLADAS (APS)
-# ==========================================
-def bloque_7_estadisticas():
-    st.title("📊 Estadísticas y Reportes")
-    
-    # 1. Usamos la conexión que repara columnas faltantes
-    try:
-        conn = conectar_y_reparar() # Esta es la función que arregla las tablas
-        
-        # 2. Leemos los datos con un bloque de seguridad (Try/Except)
-        try:
-            df_personas = pd.read_sql("SELECT * FROM integrantes", conn)
-            df_viviendas = pd.read_sql("SELECT * FROM viviendas", conn)
-            df_vacunas = pd.read_sql("SELECT * FROM vacunas", conn)
-        except Exception as e:
-            st.warning(f"Aviso: Algunas tablas están vacías o en proceso de actualización.")
-            # Creamos dataframes vacíos para que los gráficos no rompan la app
-            df_personas = pd.DataFrame()
-            df_viviendas = pd.DataFrame()
-            df_vacunas = pd.DataFrame()
+import pandas as pd
+import sqlite3
+import streamlit as st
+from datetime import datetime
+from fpdf import FPDF
+import base64
 
-        # --- AHORA TUS GRÁFICOS ---
-        if not df_personas.empty:
-            st.subheader("Censo por Ronda")
-            # Tu código de gráficos aquí...
-        else:
-            st.info("No hay datos cargados para generar estadísticas todavía.")
+def bloque_7_estadisticas():
+    st.title("📊 Reporte Demográfico Detallado")
+
+    try:
+        conn = conectar_y_reparar()
+        df = pd.read_sql("SELECT * FROM integrantes", conn)
+        conn.close()
+
+        if df.empty:
+            st.warning("⚠️ No hay datos para generar el reporte.")
+            return
+
+        # --- 1. CÁLCULO DE EDAD EN MESES ---
+        def calcular_meses(fecha_str):
+            try:
+                nac = datetime.strptime(fecha_str, '%Y-%m-%d')
+                hoy = datetime.now()
+                return (hoy.year - nac.year) * 12 + hoy.month - nac.month
+            except:
+                return None
+
+        df['meses_totales'] = df['f_nac'].apply(calcular_meses)
+        df = df.dropna(subset=['meses_totales', 'sexo'])
+
+        # --- 2. DEFINICIÓN DE TUS RANGOS EXACTOS ---
+        def asignar_rango(m):
+            if m < 6: return "0 a 5 meses"
+            if m < 12: return "6 a 11 meses"
+            if m < 24: return "1 año"
+            if m < 36: return "2 años"
+            if m < 48: return "3 años"
+            if m < 60: return "4 años"
+            if m < 72: return "5 años"
+            if m < 84: return "6 años"
+            if m < 120: return "7 a 9 años"
+            if m < 132: return "10 años"
+            if m < 144: return "11 años"
+            if m < 180: return "12 a 14 años"
+            if m < 240: return "15 a 19 años"
+            if m < 300: return "20 a 24 años"
+            if m < 360: return "25 a 29 años"
+            if m < 420: return "30 a 34 años"
+            if m < 480: return "35 a 39 años"
+            if m < 540: return "40 a 44 años"
+            if m < 600: return "45 a 49 años"
+            if m < 660: return "50 a 54 años"
+            if m < 720: return "55 a 59 años"
+            if m < 780: return "60 a 64 años"
+            return "65 y más"
+
+        orden_rangos = [
+            "0 a 5 meses", "6 a 11 meses", "1 año", "2 años", "3 años", "4 años", 
+            "5 años", "6 años", "7 a 9 años", "10 años", "11 años", "12 a 14 años",
+            "15 a 19 años", "20 a 24 años", "25 a 29 años", "30 a 34 años",
+            "35 a 39 años", "40 a 44 años", "45 a 49 años", "50 a 54 años",
+            "55 a 59 años", "60 a 64 años", "65 y más"
+        ]
+
+        df['rango_personalizado'] = df['meses_totales'].apply(asignar_rango)
+
+        # --- 3. CREACIÓN DE LA TABLA ---
+        tabla_final = pd.crosstab(
+            df['rango_personalizado'], 
+            df['sexo'], 
+            margins=True, 
+            margins_name="TOTAL"
+        ).reindex(orden_rangos + ["TOTAL"], fill_value=0)
+
+        # --- 4. MOSTRAR TABLA Y GRÁFICA ---
+        st.subheader("📋 Tabla Comparativa")
+        st.dataframe(tabla_final, use_container_width=True)
+
+        st.subheader("📈 Gráfica de Barras")
+        df_graf = tabla_final.drop("TOTAL")
+        st.bar_chart(df_graf)
+
+        # --- 5. FUNCIÓN PARA DESCARGAR PDF ---
+        def generar_pdf(df_tabla):
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 16)
+            pdf.cell(190, 10, "Reporte Demográfico - APS Orán", 0, 1, 'C')
+            pdf.set_font("Arial", '', 10)
+            pdf.cell(190, 10, f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, 'R')
+            pdf.ln(10)
             
-        conn.close()
-        
+            # Cabeceras
+            pdf.set_font("Arial", 'B', 10)
+            pdf.cell(60, 10, "Rango de Edad", 1)
+            pdf.cell(40, 10, "Femenino", 1)
+            pdf.cell(40, 10, "Masculino", 1)
+            pdf.cell(40, 10, "Subtotal", 1)
+            pdf.ln()
+            
+            # Datos
+            pdf.set_font("Arial", '', 10)
+            for index, row in df_tabla.iterrows():
+                pdf.cell(60, 10, str(index), 1)
+                pdf.cell(40, 10, str(row.get('Femenino', 0)), 1)
+                pdf.cell(40, 10, str(row.get('Masculino', 0)), 1)
+                pdf.cell(40, 10, str(row.get('TOTAL', row.sum())), 1)
+                pdf.ln()
+            
+            return pdf.output(dest='S').encode('latin-1')
+
+        pdf_bytes = generar_pdf(tabla_final)
+        st.download_button(
+            label="📥 Descargar Reporte en PDF",
+            data=pdf_bytes,
+            file_name="reporte_demografico.pdf",
+            mime="application/pdf"
+        )
+
     except Exception as e:
-        st.error(f"Error crítico en el módulo de estadísticas: {e}")
-def bloque_7_estadisticas():
-    st.title("📊 Distribución Poblacional Detallada")
-    
-    conn = sqlite3.connect('aps_oran_final.db')
-    
-    try:
-        query = "SELECT f_nac, sexo FROM integrantes"
-        df = pd.read_sql(query, conn)
-    except:
-        st.error("Error al acceder a la base de datos.")
-        return
-
-    if df.empty:
-        st.warning("No hay datos cargados para generar la tabla.")
-        conn.close()
-        return
-
-    # 1. Preparación de fechas
-    df['f_nac'] = pd.to_datetime(df['f_nac'], errors='coerce')
-    df = df.dropna(subset=['f_nac', 'sexo'])
-    hoy = pd.Timestamp(date.today())
-
-    # 2. Cálculo de edad en MESES totales para mayor precisión
-    def calcular_meses(fecha):
-        return (hoy.year - fecha.year) * 12 + (hoy.month - fecha.month) - (1 if hoy.day < fecha.day else 0)
-
-    df['meses'] = df['f_nac'].apply(calcular_meses)
-
-    # 3. Función de clasificación según tus rangos exactos
-    def clasificar_aps(m):
-        if m < 6: return "0 a 5 meses"
-        if m < 12: return "6 a 11 meses"
-        if m < 24: return "1 año"
-        if m < 36: return "2 años"
-        if m < 48: return "3 años"
-        if m < 60: return "4 años"
-        if m < 72: return "5 años"
-        if m < 84: return "6 años"
-        if m < 120: return "7 a 9 años"
-        if m < 132: return "10 años"
-        if m < 144: return "11 años"
-        if m < 180: return "12 a 14 años"
-        if m < 240: return "15 a 19 años"
-        if m < 300: return "20 a 24 años"
-        if m < 360: return "25 a 29 años"
-        if m < 420: return "30 a 34 años"
-        if m < 480: return "35 a 39 años"
-        if m < 540: return "40 a 44 años"
-        if m < 600: return "45 a 49 años"
-        if m < 660: return "50 a 54 años"
-        if m < 720: return "55 a 59 años"
-        if m < 780: return "60 a 64 años"
-        return "65 años y más"
-
-    # Orden lógico de los rangos para la tabla
-    orden_rangos = [
-        "0 a 5 meses", "6 a 11 meses", "1 año", "2 años", "3 años", "4 años",
-        "5 años", "6 años", "7 a 9 años", "10 años", "11 años", "12 a 14 años",
-        "15 a 19 años", "20 a 24 años", "25 a 29 años", "30 a 34 años",
-        "35 a 39 años", "40 a 44 años", "45 a 49 años", "50 a 54 años",
-        "55 a 59 años", "60 a 64 años", "65 años y más"
-    ]
-
-    df['Rango APS'] = df['meses'].apply(clasificar_aps)
-
-    # 4. CREAR LA TABLA CRUZADA
-    st.subheader("👥 Matriz de Población por Sexo y Edad")
-    
-    tabla = pd.crosstab(df['Rango APS'], df['sexo'])
-    
-    # Asegurar columnas y reindexar para mantener el orden de edad
-    for col in ['Masculino', 'Femenino']:
-        if col not in tabla.columns: tabla[col] = 0
-    
-    tabla = tabla.reindex(orden_rangos).fillna(0).astype(int)
-    tabla['Total'] = tabla['Masculino'] + tabla['Femenino']
-    
-    # Fila de Totales Finales
-    tot_m = tabla['Masculino'].sum()
-    tot_f = tabla['Femenino'].sum()
-    tot_t = tabla['Total'].sum()
-    
-    # Mostrar tabla con estilo
-    st.table(tabla)
-    
-    st.markdown(f"""
-    **RESUMEN GENERAL:**
-    * **Total Masculino:** {tot_m}
-    * **Total Femenino:** {tot_f}
-    * **Población Total:** {tot_t}
-    """)
-
-    conn.close()
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
+        st.error(f"Error: {e}")
 # ==========================================
 # BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
 # ==========================================
@@ -1533,6 +1512,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
