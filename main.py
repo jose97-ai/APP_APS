@@ -1050,7 +1050,7 @@ def main():
             st.rerun()
 
         # Ruteo de Bloques
-        if menu == "Dashboard": bloque_0_dashboard()
+        if menu == "Panel de Control": bloque_0_dashboard()
         elif menu == "1. Censo": bloque_1_censo()
         elif menu == "2. Materno": bloque_2_materno()
         elif menu == "3. Vivienda": bloque_3_vivienda()
@@ -1063,6 +1063,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
