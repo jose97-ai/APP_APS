@@ -1629,42 +1629,63 @@ def bloque_11_vigilancia_epidemiologica():
         conn.close()
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
-# ==========================================
-# FINAL DEL ARCHIVO: LÓGICA DE NAVEGACIÓN
-# ==========================================
-# --- FINAL DEL ARCHIVO ---
-
+# =================================================================
+# FUNCIÓN PRINCIPAL DE NAVEGACIÓN (MAIN)
+# =================================================================
 def main():
-def main():
-    st.sidebar.title("🏥 APS Orán")
-    
-    opciones = [
-        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
-    ]
+    # 1. Configuración de la Barra Lateral (Sidebar)
+    # Usamos 'with' para agrupar todo lo que va a la izquierda
+    with st.sidebar:
+        st.image("https://via.placeholder.com/150?text=APS+ORAN", width=100) # Opcional: Logo
+        st.title("Sistema APS Orán")
+        st.markdown("---")
+        
+        opciones = [
+            "🏠 Panel de Control", 
+            "📝 1. Censo", 
+            "🤰 2. Materno", 
+            "🏠 3. Vivienda", 
+            "💉 4. Vacunas", 
+            "⚖️ 5. Nutrición", 
+            "💊 6. TBC", 
+            "📊 7. Estadísticas", 
+            "🗺️ 8. Mapas", 
+            "⚙️ 9. Admin",
+            "🛠️ 10. Gestión Avanzada", 
+            "🚨 11. Vigilancia Alertas"
+        ]
 
-    # Agregamos 'key="menu_principal"' para evitar el error de duplicado
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="menu_principal")
+        # Agregamos la KEY para evitar el error de 'DuplicateElementId'
+        menu = st.selectbox(
+            "Seleccione un Bloque:", 
+            opciones, 
+            key="navegacion_principal_aps"
+        )
+        
+        st.sidebar.markdown("---")
+        st.sidebar.caption("Versión 1.2 - 2026")
 
+    # 2. Lógica de Enrutamiento (Qué bloque mostrar según el menú)
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
+    elif menu == "📝 1. Censo":
+        # Asegúrate de que el nombre de la función coincida con tu código
+        if 'bloque_1_vivienda' in globals(): bloque_1_vivienda()
+    elif menu == "⚙️ 9. Admin":
+        # Aquí es donde se cambia la contraseña (según tu nota del 07/01)
+        if 'bloque_9_configuracion' in globals(): bloque_9_configuracion()
     elif menu == "🛠️ 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
     elif menu == "🚨 11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
-    # Asegúrate de que los elif coincidan con los nombres de la lista 'opciones'
-# ESTO ES LO QUE DEBES REVISAR: 
-# No debe haber NINGÚN espacio antes de 'if' ni antes de 'main()'
+    else:
+        st.info(f"El bloque **{menu}** está cargado. Use el menú lateral para navegar.")
+
+# =================================================================
+# DISPARADOR DEL PROGRAMA (DEBE ESTAR AL FINAL SIN ESPACIOS)
+# =================================================================
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
 
 
 
