@@ -773,7 +773,7 @@ def bloque_7_estadistica():
 
     else:
         st.warning(f"No hay registros cargados por el usuario {usuario_actual}.")
-        def bloque_7_estadistica():
+def bloque_7_estadistica():
     st.header("📊 Bloque 7: Control Poblacional y Estadísticas")
     
     conn = obtener_conexion()
@@ -1063,6 +1063,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
