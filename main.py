@@ -134,48 +134,6 @@ def bloque_11_vigilancia():
     st.write("Listado de niños menores de 5 años con vacunas pendientes.")
     # Aquí iría el DataFrame de niños con alertas
     pass
-
-# =================================================================
-# 4. MOTOR DE NAVEGACIÓN (MAIN)
-# =================================================================
-
-def main():
-    # Inicializar DB siempre al arrancar
-    inicializar_db()
-
-    # Configuración de la BARRA LATERAL
-    with st.sidebar:
-        st.title("🏥 APS Orán")
-        st.markdown("---")
-        
-        opciones = [
-            "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-            "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-            "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-            "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
-        ]
-
-        # La clave 'key' es vital para evitar errores de duplicados
-        menu = st.selectbox("Seleccione un Bloque:", opciones, key="nav_principal_2026")
-        
-        st.markdown("---")
-        st.caption("Sistema de Gestión APS v1.2")
-
-    # Lógica de despliegue de bloques
-    if menu == "🏠 Panel de Control":
-        bloque_0_dashboard()
-    elif menu == "🚨 11. Vigilancia Alertas":
-        bloque_11_vigilancia()
-    elif menu == "⚙️ 9. Admin":
-        st.subheader("⚙️ Configuración del Sistema")
-        st.write("Sección para cambio de contraseña (Instrucción 07/01/2026)")
-        # Aquí llamarías a tu bloque_9_configuracion()
-    else:
-        st.info(f"El bloque **{menu}** está listo para ser desarrollado.")
-
-# EL DISPARADOR FINAL: Sin espacios a la izquierda
-if __name__ == "__main__":
-    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1588,6 +1546,7 @@ def main():
 # =================================================================
 if __name__ == "__main__":
     main()
+
 
 
 
