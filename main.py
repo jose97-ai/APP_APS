@@ -24,29 +24,44 @@ def inicializar_db():
     return conn
 
 def bloque_0_inicio():
-    """Muestra el Dashboard de Inicio con las alertas solicitadas"""
     st.title("🏠 Sistema APS Orán - Inicio")
     conn = inicializar_db()
+    
     try:
-        p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Población", f"{p} pers.")
-        c2.metric("Viviendas", v)
-        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
+        # Métricas principales
+        p_res = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        v_res = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Población", f"{p_res} pers.")
+        c2.metric("Viviendas", v_res)
+        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
+
         st.divider()
+
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("🚩 Riesgo Habitacional")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            st.dataframe(df_r) if not df_r.empty else st.success("Sin riesgos")
+            if not df_r.empty:
+                st.error(f"Hay {len(df_r)} viviendas en riesgo crítico.")
+                st.dataframe(df_r, use_container_width=True)
+            else:
+                st.success("✅ Sin riesgos críticos detectados.") # Asegúrate de que tenga los ()
+
         with col2:
             st.subheader("👶 Alerta Vacunación (<5 años)")
             limite = (date.today() - timedelta(days=5*365)).isoformat()
             query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
             df_v = pd.read_sql(query, conn)
-            st.warning(f"{len(df_v)} pendientes") if not df_v.empty else st.success("Al día")
+            
+            if not df_v.empty:
+                st.warning(f"Hay {len(df_v)} niños con vacunas pendientes.")
+                st.dataframe(df_v, use_container_width=True)
+            else:
+                st.success("✅ Todos los niños están al día.") # Asegúrate de que tenga los ()
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
     finally:
         conn.close()
         # Aquí sigue tu código original del Bloque 1
@@ -1499,6 +1514,7 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
 
 
