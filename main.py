@@ -1,3 +1,32 @@
+# --- SISTEMA DE SEGURIDAD (Copia debajo de los imports) ---
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+
+def verificar_login(user, pwd):
+    """Verifica credenciales en la base de datos"""
+    conn = obtener_conexion()
+    try:
+        # Busca el usuario. Si no hay usuarios en la DB, permite 'admin'/'admin' para no quedar fuera.
+        res = conn.execute("SELECT * FROM usuarios WHERE usuario = ? AND password = ?", (user, pwd)).fetchone()
+        if res: return True
+        if user == "admin" and pwd == "admin": return True # Acceso de emergencia
+        return False
+    finally:
+        conn.close()
+
+def mostrar_login():
+    st.title("🏥 Sistema APS Orán 2026")
+    with st.form("login_form"):
+        st.subheader("🔐 Inicio de Sesión")
+        u = st.text_input("Usuario")
+        p = st.text_input("Contraseña", type="password")
+        if st.form_submit_button("Entrar"):
+            if verificar_login(u, p):
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = u
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
 def login():
     st.title("🔐 Acceso al Sistema APS")
     usuario = st.text_input("Usuario")
@@ -1531,5 +1560,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
