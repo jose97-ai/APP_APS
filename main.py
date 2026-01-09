@@ -957,96 +957,158 @@ def bloque_7_estadistica():
     else:
         st.warning(f"No hay registros cargados para la vista de {usuario_actual}.")
 # ==========================================
-# BLOQUE 8: VISTA ESTRATÉGICA (BLINDADO)
+# BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
 # ==========================================
-def bloque_8_supervisor():
+def bloque_8_analisis():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Supervisor')
-    ronda_act = "1" # O recuperar de tu función de rondas
+    rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
+    nombre_real = st.session_state.get('nombre_agente', 'Usuario')
     
-    st.header(f"🏛️ Panel de Control de Supervisión")
-    
+    st.header(f"📈 Bloque 8: Análisis de Riesgo y Rondas")
+    st.caption(f"Análisis para: {nombre_real} ({rol_actual})")
+
     conn = obtener_conexion()
     
-    # --- FUNCIÓN AUXILIAR PARA VALIDACIÓN ---
+    # --- FUNCIONES DE SEGURIDAD PARA EVITAR CRASH ---
     def tabla_existe(nombre_tabla):
         c = conn.cursor()
         c.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
         return c.fetchone()[0] == 1
 
-    try:
-        # 1. Obtener el equipo y validar que no esté vacío
-        equipo = obtener_equipo_agentes(usuario_actual)
-        if not equipo:
-            st.warning("⚠️ No tiene agentes asignados a su cargo. Contacte al Administrador.")
-            return
+    def columna_existe(tabla, columna):
+        if not tabla_existe(tabla): return False
+        c = conn.cursor()
+        c.execute(f"PRAGMA table_info({tabla})")
+        return columna in [info[1] for info in c.fetchall()]
 
-        # 2. Construcción de la Query Dinámica según tablas existentes
-        # Empezamos con la tabla base que SIEMPRE existe
-        query_parts = ["SELECT i.dni, i.registrado_por as agente, i.f_nac, i.latitud, i.longitud"]
+    try:
+        # 1. DEFINIR FILTRO DE SEGÚN ROL
+        if rol_actual in ["Supervisor", "Administrador"]:
+            if rol_actual == "Administrador":
+                df_u = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Agente Sanitario'", conn)
+                equipo = df_u['usuario'].tolist()
+            else:
+                # Función que ya creamos para obtener agentes a cargo
+                equipo = obtener_equipo_agentes(usuario_actual)
+            
+            if not equipo:
+                st.warning("No hay agentes vinculados a su supervisión.")
+                return
+            
+            placeholders = ', '.join(['?'] * len(equipo))
+            filtro_sql = f"WHERE i.registrado_por IN ({placeholders})"
+            params = equipo
+        else:
+            # Es un Agente Sanitario, solo ve sus datos
+            filtro_sql = "WHERE i.registrado_por = ?"
+            params = (usuario_actual,)
+
+        # 2. CONSTRUCCIÓN DINÁMICA DE LA QUERY (ANTI-ERROR)
+        query_parts = ["SELECT i.dni, i.nombre, i.f_nac, i.latitud, i.longitud, i.registrado_por as agente"]
         joins = []
         
+        # Validación de tabla Materno
         if tabla_existe('controles_embarazo'):
-            query_parts.append(", e.ronda as ronda_emb")
-            joins.append("LEFT JOIN controles_embarazo e ON i.dni = e.dni")
+            col_r = "e.ronda" if columna_existe('controles_embarazo', 'ronda') else "'Sin Ronda' as ronda"
+            query_parts.append(f", {col_r} as ronda_emb")
+            joins.append("LEFT JOIN (SELECT DISTINCT dni, ronda FROM controles_embarazo) e ON i.dni = e.dni")
         else:
             query_parts.append(", NULL as ronda_emb")
 
+        # Validación de tabla Crecimiento
         if tabla_existe('crecimiento'):
-            query_parts.append(", c.imc, c.ronda as ronda_nut")
-            joins.append("LEFT JOIN crecimiento c ON i.dni = c.dni")
+            col_r = "c.ronda" if columna_existe('crecimiento', 'ronda') else "'Sin Ronda'"
+            query_parts.append(f", c.imc, {col_r} as ronda_nut")
+            joins.append("LEFT JOIN (SELECT dni, imc, ronda FROM crecimiento GROUP BY dni HAVING MAX(fecha)) c ON i.dni = c.dni")
         else:
             query_parts.append(", NULL as imc, NULL as ronda_nut")
 
+        # Validación de tabla TBC
         if tabla_existe('tbc'):
-            query_parts.append(", t.estado as tbc_est, t.ronda as ronda_tbc")
-            joins.append("LEFT JOIN tbc t ON i.dni = t.dni")
+            col_r = "t.ronda" if columna_existe('tbc', 'ronda') else "'Sin Ronda'"
+            query_parts.append(f", t.estado as tbc_est, {col_r} as ronda_tbc")
+            joins.append("LEFT JOIN (SELECT dni, estado, ronda FROM tbc GROUP BY dni HAVING MAX(fecha_muestra)) t ON i.dni = t.dni")
         else:
             query_parts.append(", NULL as tbc_est, NULL as ronda_tbc")
 
-        # Unimos todo
-        placeholders = ', '.join(['?'] * len(equipo))
-        full_query = f"{' '.join(query_parts)} FROM integrantes i {' '.join(joins)} WHERE i.registrado_por IN ({placeholders})"
-        
-        df = pd.read_sql(full_query, conn, params=equipo)
+        # Query Final
+        full_query = f"{' '.join(query_parts)} FROM integrantes i {' '.join(joins)} {filtro_sql}"
+        df = pd.read_sql(full_query, conn, params=params)
 
         if df.empty:
-            st.info("Los agentes de su equipo aún no han registrado datos en el sistema.")
-        else:
-            # --- VISUALIZACIÓN ---
-            st.subheader(f"📊 Resumen del Equipo - Ronda {ronda_act}")
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Población Total", len(df.drop_duplicates('dni')))
-            
-            # Conteo seguro de embarazadas
-            total_emb = len(df[df['ronda_emb'] == ronda_act]) if 'ronda_emb' in df.columns else 0
-            c2.metric("Embarazadas Ronda", total_emb)
-            
-            # Conteo seguro de bajo peso
-            total_nut = len(df[df['imc'] < 18.5]) if 'imc' in df.columns else 0
-            c3.metric("Casos Bajo Peso", total_nut)
+            st.info("No hay datos suficientes cargados para mostrar el análisis.")
+            return
 
-            st.divider()
+        # 3. PROCESAMIENTO Y VISUALIZACIÓN
+        tab_mapa, tab_rondas = st.tabs(["🗺️ Mapa del Sector", "📊 Análisis por Rondas"])
 
-            # Gráfico de Desempeño por Agente
-            st.subheader("📈 Actividad por Agente")
-            desempeno = df.groupby('agente').size().reset_index(name='Registros')
-            fig_perf = px.bar(desempeno, x='agente', y='Registros', color='agente', title="Carga de datos por responsable")
-            st.plotly_chart(fig_perf, use_container_width=True)
+        with tab_mapa:
+            st.subheader("Georeferenciación de Riesgos")
+            
+            # Definir Riesgo para el color del mapa
+            def categorizar(row):
+                if row['tbc_est'] == 'Activo': return '🔴 TBC Activo'
+                if row['ronda_emb'] is not None: return '🟣 Embarazada'
+                if row['imc'] is not None and row['imc'] < 18.5: return '🟠 Bajo Peso'
+                return '🟢 Control Normal'
 
-            # Mapa
-            st.subheader("📍 Distribución Geográfica del Equipo")
+            df['Riesgo'] = df.apply(categorizar, axis=1)
+            
             df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)].dropna(subset=['latitud', 'longitud'])
+            
             if not df_mapa.empty:
-                fig_map = px.scatter_mapbox(df_mapa, lat="latitud", lon="longitud", color="agente", 
-                                          zoom=12, mapbox_style="carto-positron", height=500)
+                fig_map = px.scatter_mapbox(
+                    df_mapa, lat="latitud", lon="longitud", color="Riesgo",
+                    hover_name="nombre", zoom=13, height=500,
+                    mapbox_style="carto-positron",
+                    color_discrete_map={'🔴 TBC Activo': 'red', '🟣 Embarazada': 'purple', 
+                                        '🟠 Bajo Peso': 'orange', '🟢 Control Normal': 'green'}
+                )
+                fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig_map, use_container_width=True)
             else:
-                st.info("No hay coordenadas GPS suficientes para mostrar el mapa.")
+                st.warning("No hay coordenadas GPS cargadas para mostrar en el mapa.")
+
+        with tab_rondas:
+            st.subheader("Evolución de Cobertura por Ronda")
+            
+            # Crear resumen por rondas (1 a 4)
+            rondas_list = ["1", "2", "3", "4"]
+            data_rondas = []
+            
+            for r in rondas_list:
+                c_emb = len(df[df['ronda_emb'] == r])
+                c_nut = len(df[df['ronda_nut'] == r])
+                c_tbc = len(df[df['ronda_tbc'] == r])
+                data_rondas.append({"Ronda": f"Ronda {r}", "Embarazo": c_emb, "Nutrición": c_nut, "TBC": c_tbc})
+            
+            df_r = pd.DataFrame(data_rondas)
+            
+            fig_bar = px.bar(df_r, x="Ronda", y=["Embarazo", "Nutrición", "TBC"],
+                             barmode="group", title="Resumen de Controles Trimestrales",
+                             labels={"value": "Cantidad de Personas", "variable": "Programa"})
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Tabla de población por edad (Pirámide resumida)
+            st.divider()
+            st.subheader("👥 Población por Rangos de Edad")
+            
+            def calcular_rango(fn):
+                try:
+                    anios = date.today().year - datetime.strptime(fn, '%Y-%m-%d').year
+                    if anios < 2: return "0-1 año"
+                    if anios < 15: return "2-14 años"
+                    if anios < 65: return "15-64 años"
+                    return "65+ años"
+                except: return "Sin Datos"
+
+            df['Rango'] = df['f_nac'].apply(calcular_rango)
+            resumen_edad = df.groupby('Rango').size().reset_index(name='Total')
+            st.table(resumen_edad)
 
     except Exception as e:
-        st.error(f"Error crítico en Bloque 8: {e}")
+        st.error(f"Error de base de datos en Bloque 8: {e}")
+        st.info("Sugerencia: Verifique que las tablas de salud tengan la columna 'ronda'.")
     finally:
         conn.close()
 # ==========================================
@@ -1276,6 +1338,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
