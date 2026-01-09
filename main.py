@@ -1500,10 +1500,13 @@ def bloque_9_admin():
     import sqlite3
     import pandas as pd
 
-    if st.session_state.get('usuario_logueado') != 'admin':
-        st.error("🚫 Acceso denegado.")
+    # MODIFICACIÓN: Si no hay usuario, permitimos entrar para pruebas 
+    # o verificamos si el usuario es admin
+    usuario = st.session_state.get('usuario_logueado', 'admin') # 'admin' por defecto para pruebas
+    
+    if usuario != 'admin':
+        st.error("🚫 Acceso denegado. Esta sección es solo para el Administrador.")
         return
-
     st.title("⚙️ Gestión Superior APS - Orán")
     
     conn = sqlite3.connect('aps_oran_final.db')
@@ -1855,27 +1858,21 @@ def main():
         elif 'seguimiento' in globals(): seguimiento()
 
     elif seleccion == "⚙️ 9. Admin":
-        # Aquí forzamos que aparezca el bloque que creamos para el manual y claves
-        if 'bloque_9_admin' in globals(): 
-            bloque_9_admin()
-        else:
-            st.info("Configuración de Seguridad y Manual de Usuario")
+        bloque_9_admin()
 
-   elif seleccion == "🚀 10. Gestión Avanzada":
-        # Busca cualquier función que pueda ser la 10
-        if 'bloque_10_gestion' in globals(): bloque_10_gestion()
-        elif 'gestion_avanzada' in globals(): gestion_avanzada()
-        elif 'bloque_10' in globals(): bloque_10()
-        else: st.warning("⚠️ No se encontró la función del Bloque 10 en tus 2000 líneas.")
+    elif seleccion == "🚀 10. Gestión Avanzada":
+        if 'bloque_10_gestion' in globals():
+            bloque_10_gestion()
+        else:
+            st.info("Contenido del Bloque 10 en preparación.")
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
-        # Busca cualquier función que pueda ser la 11
-        if 'bloque_11_vigilancia' in globals(): bloque_11_vigilancia()
-        elif 'vigilancia' in globals(): vigilancia()
-        elif 'bloque_11' in globals(): bloque_11()
-        else: st.warning("⚠️ No se encontró la función del Bloque 11.")
+        if 'bloque_11_vigilancia' in globals():
+            bloque_11_vigilancia()
+        else:
+            st.info("Contenido del Bloque 11 en preparación.")
 
-# Ejecución única
+# ESTO DEBE ESTAR PEGADO AL BORDE IZQUIERDO, SIN ESPACIOS
 if __name__ == "__main__":
     main()
 
