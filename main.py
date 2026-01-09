@@ -1033,218 +1033,115 @@ def bloque_8_supervisor(): bloque_8_analisis()
 def bloque_8_mapas(): bloque_8_analisis()
 def bloque_8_analisis_agente(): bloque_8_analisis()
 # ==========================================
-# BLOQUE 9: ADMINISTRACIÓN, SEGURIDAD Y EQUIPOS
+# BLOQUE 9: ADMINISTRACIÓN Y MANTENIMIENTO
 # ==========================================
-import hashlib
-
-def hash_password(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def bloque_9_admin():
-    rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-
-    st.header("⚙️ Configuración y Gestión de Equipos")
+def bloque_9_admin_total():
+    st.title("⚙️ Panel de Administración Central")
     
-    # --- MANUAL DE USUARIO INTEGRADO ---
-    with st.expander("📖 Manual de Usuario - Seguridad y Jerarquías"):
-        st.markdown("""
-        ### Gestión de Seguridad:
-        1. **Cambio de Clave:** Por política de seguridad de APS Orán, se recomienda actualizar su contraseña cada 3 meses desde la pestaña 'Mi Cuenta'.
-        2. **Jerarquías:** El Administrador debe asignar cada Agente a un Supervisor para que los reportes consolidados funcionen.
-        3. **Auditoría:** Todas las acciones (altas, bajas, modificaciones) quedan registradas con el ID del usuario activo.
-        """)
+    # Solo permitir acceso a Administradores
+    rol_actual = st.session_state.get('rol_usuario', '')
+    if rol_actual != "Administrador":
+        st.error("Acceso denegado. Se requieren permisos de Administrador.")
+        return
 
-    # Pestañas según Rol
-    pestanas = ["🔑 Mi Cuenta"]
-    if rol_actual == "Administrador":
-        pestanas.extend(["👥 Gestionar Personal", "🔗 Asignar Equipos", "📜 Lista de Usuarios"])
-    
-    tabs = st.tabs(pestanas)
+    # Crear Pestañas para organizar las herramientas
+    tab_usuarios, tab_bajas, tab_mantenimiento = st.tabs([
+        "👤 Crear Usuarios", 
+        "🗑️ Gestionar Bajas", 
+        "🛠️ Modo Desarrollador"
+    ])
 
-    # TAREA 1: MI CUENTA (Cambio de contraseña para todos)
-    with tabs[0]:
-        st.subheader("Configuración de Seguridad")
-        with st.form("form_cambio_pass"):
-            st.info(f"Usuario: **{usuario_actual}**")
-            old_p = st.text_input("Contraseña Actual", type="password")
-            new_p = st.text_input("Nueva Contraseña", type="password")
-            conf_p = st.text_input("Confirmar Nueva Contraseña", type="password")
+    conn = sqlite3.connect('aps_oran_final.db')
+
+    # --- PESTAÑA 1: CREAR USUARIOS ---
+    with tab_usuarios:
+        st.subheader("Registrar Nuevo Personal")
+        with st.form("form_nuevo_usuario"):
+            nuevo_user = st.text_input("Nombre de Usuario (Login):")
+            nuevo_pass = st.text_input("Contraseña:", type="password")
+            nombre_real = st.text_input("Nombre Completo:")
+            nuevo_rol = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"])
             
-            if st.form_submit_button("🔄 Actualizar Mi Clave"):
-                if new_p != conf_p:
-                    st.error("Las nuevas contraseñas no coinciden.")
-                elif len(new_p) < 6:
-                    st.warning("La clave debe tener al menos 6 caracteres.")
-                else:
-                    conn = obtener_conexion()
-                    check = pd.read_sql("SELECT * FROM usuarios WHERE usuario=? AND password=?", 
-                                      conn, params=(usuario_actual, hash_password(old_p)))
-                    if not check.empty:
-                        conn.execute("UPDATE usuarios SET password=? WHERE usuario=?", 
-                                   (hash_password(new_p), usuario_actual))
-                        conn.commit()
-                        st.success("✅ Contraseña actualizada correctamente.")
-                    else:
-                        st.error("La contraseña actual es incorrecta.")
-                    conn.close()
+            # Si es agente, permitir asignarle un supervisor
+            supervisor_asignado = None
+            if nuevo_rol == "Agente Sanitario":
+                df_super = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)
+                supervisor_asignado = st.selectbox("Asignar Supervisor (Opcional):", ["Ninguno"] + df_super['usuario'].tolist())
 
-    # TAREA 2: ALTA DE USUARIOS (Solo Admin)
-    if rol_actual == "Administrador":
-        with tabs[1]:
-            st.subheader("Registrar Nuevo Personal")
-            with st.form("registro_seguridad"):
-                u_id = st.text_input("ID de Usuario (ej: m.gomez)")
-                u_nom = st.text_input("Nombre y Apellido")
-                u_rol = st.selectbox("Rol", ["Agente Sanitario", "Supervisor", "Administrador"])
-                u_pass = st.text_input("Contraseña Inicial", type="password")
-                
-                if st.form_submit_button("➕ Crear Cuenta"):
-                    if u_id and u_pass:
-                        conn = obtener_conexion()
-                        try:
-                            conn.execute("INSERT INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)",
-                                        (u_id, u_nom, u_rol, hash_password(u_pass)))
-                            conn.commit()
-                            st.success(f"✅ Usuario {u_id} creado.")
-                        except:
-                            st.error("Error: El ID ya existe o faltan datos.")
-                        finally:
-                            conn.close()
-
-        # TAREA 3: ASIGNACIÓN DE EQUIPOS (Lo solicitado: Solo Admin)
-        with tabs[2]:
-            st.subheader("🔗 Vinculación Agente-Supervisor")
-            st.caption("Seleccione qué Agentes Sanitarios estarán bajo la supervisión de quién.")
-            
-            conn = obtener_conexion()
-            # Obtenemos listas de la DB
-            supervisores = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)['usuario'].tolist()
-            agentes = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Agente Sanitario'", conn)['usuario'].tolist()
-            
-            with st.form("form_equipos"):
-                super_sel = st.selectbox("Seleccionar Supervisor", supervisores)
-                agentes_sel = st.multiselect("Seleccionar Agentes a Cargo", agentes)
-                
-                if st.form_submit_button("🔗 Guardar Equipo"):
+            if st.form_submit_button("Crear Usuario"):
+                if nuevo_user and nuevo_pass:
                     try:
-                        # Primero limpiamos asignaciones previas para este supervisor si se desea reasignar
-                        # O simplemente agregamos el supervisor_id a la tabla de usuarios
-                        for ag in agentes_sel:
-                            conn.execute("UPDATE usuarios SET supervisor_id=? WHERE usuario=?", (super_sel, ag))
+                        cursor = conn.cursor()
+                        # Asegurar que existan las columnas nombre y supervisor_id
+                        cursor.execute("PRAGMA table_info(usuarios)")
+                        cols = [info[1] for info in cursor.fetchall()]
+                        if "nombre" not in cols: cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
+                        if "supervisor_id" not in cols: cursor.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
+                        
+                        sup_id = None if supervisor_asignado == "Ninguno" else supervisor_asignado
+                        
+                        cursor.execute("""INSERT INTO usuarios (usuario, password, rol, nombre, supervisor_id) 
+                                       VALUES (?, ?, ?, ?, ?)""", 
+                                       (nuevo_user, nuevo_pass, nuevo_rol, nombre_real, sup_id))
                         conn.commit()
-                        st.success(f"✅ Equipo asignado al Supervisor {super_sel}")
-                    except sqlite3.OperationalError:
-                        conn.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
-                        conn.commit()
-                        st.info("Estructura actualizada. Reintente la asignación.")
-            conn.close()
+                        st.success(f"Usuario {nuevo_user} creado con éxito.")
+                    except sqlite3.IntegrityError:
+                        st.error("El nombre de usuario ya existe.")
+                else:
+                    st.error("Usuario y contraseña son obligatorios.")
 
-        with tabs[3]:
-            st.subheader("Personal de APS Orán")
-            conn = obtener_conexion()
-            df_u = pd.read_sql("SELECT usuario, nombre, rol, supervisor_id as 'Supervisor Cargo' FROM usuarios", conn)
-            st.dataframe(df_u, use_container_width=True)
-            conn.close()
-            # ==========================================
-# PANEL DE MANTENIMIENTO (MODO DESARROLLADOR)
-# ==========================================
-def bloque_mantenimiento_db():
-    st.title("🛠️ Mantenimiento de Base de Datos")
-    st.warning("Cuidado: Estas acciones son irreversibles y afectan a todo el sistema.")
-
-    tab_borrado, tab_reset = st.tabs(["🗑️ Borrar Individual", "🔥 Reset Total"])
-
-    with tab_borrado:
-        st.subheader("Eliminar un registro específico")
-        dni_borrar = st.text_input("Ingrese el DNI del integrante a eliminar:")
-        confirmar_dni = st.checkbox("Confirmo que deseo borrar este DNI y todo su historial de salud")
+    # --- PESTAÑA 2: BORRAR USUARIOS ---
+    with tab_bajas:
+        st.subheader("Eliminar Personal del Sistema")
+        df_u = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
+        st.dataframe(df_u, use_container_width=True)
         
-        if st.button("Borrar Registro", type="primary"):
-            if dni_borrar and confirmar_dni:
-                try:
-                    conn = sqlite3.connect('aps_oran_final.db')
-                    cursor = conn.cursor()
-                    # Borrado en cascada manual
-                    tablas = ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']
-                    for t in tablas:
-                        cursor.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_borrar,))
-                    
-                    conn.commit()
-                    conn.close()
-                    st.success(f"DNI {dni_borrar} eliminado correctamente de todas las tablas.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+        user_borrar = st.selectbox("Seleccione usuario a eliminar:", [""] + df_u['usuario'].tolist())
+        if user_borrar:
+            if user_borrar == st.session_state.get('usuario_logueado'):
+                st.warning("No puedes eliminarte a ti mismo mientras estás en sesión.")
             else:
-                st.info("Debe ingresar un DNI y marcar la casilla de confirmación.")
-
-    with tab_reset:
-        st.subheader("Limpieza total de la Base de Datos")
-        st.error("ESTO BORRARÁ TODA LA INFORMACIÓN DEL CENSO Y SALUD (excepto usuarios)")
-        
-        seguridad = st.text_input("Escriba 'BORRAR TODO' para habilitar el botón:")
-        if seguridad == "BORRAR TODO":
-            if st.button("EJECUTAR LIMPIEZA TOTAL", type="primary"):
-                try:
-                    conn = sqlite3.connect('aps_oran_final.db')
+                if st.button("CONFIRMAR ELIMINACIÓN PERMANENTE", type="primary"):
                     cursor = conn.cursor()
-                    tablas = ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']
-                    for t in tablas:
+                    cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (user_borrar,))
+                    conn.commit()
+                    st.success(f"Usuario {user_borrar} eliminado.")
+                    st.rerun()
+
+    # --- PESTAÑA 3: MODO DESARROLLADOR (EL BOTÓN QUE BUSCABAS) ---
+    with tab_mantenimiento:
+        st.subheader("🛠️ Herramientas de Mantenimiento")
+        st.error("¡Peligro! Estas acciones borran datos de salud y censo.")
+        
+        col_dev1, col_dev2 = st.columns(2)
+        
+        with col_dev1:
+            st.write("**Borrar por DNI**")
+            dni_test = st.text_input("DNI de prueba a eliminar:")
+            if st.button("Limpiar DNI de todas las tablas"):
+                if dni_test:
+                    cursor = conn.cursor()
+                    for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
+                        cursor.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_test,))
+                    conn.commit()
+                    st.success(f"DNI {dni_test} borrado.")
+        
+        with col_dev2:
+            st.write("**Reset de Fábrica**")
+            confirmar_reset = st.text_input("Escriba 'RESET' para borrar TODO el censo:")
+            if confirmar_reset == "RESET":
+                if st.button("BORRAR TODA LA BASE DE DATOS", type="primary"):
+                    cursor = conn.cursor()
+                    for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
                         cursor.execute(f"DELETE FROM {t}")
                     conn.commit()
-                    conn.close()
-                    st.success("Base de datos reseteada. El sistema está limpio para iniciar el trabajo oficial.")
-                except Exception as e:
-                    st.error(f"Error técnico: {e}")
-                    # ==========================================
-# GESTIÓN DE USUARIOS: ELIMINACIÓN
-# ==========================================
-def seccion_gestionar_usuarios():
-    st.subheader("👥 Gestión de Usuarios (Bajas)")
-    
-    conn = sqlite3.connect('aps_oran_final.db')
-    
-    try:
-        # 1. Mostrar lista de usuarios actuales para referencia
-        df_usuarios = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
-        st.dataframe(df_usuarios, use_container_width=True)
-        
-        st.divider()
-        
-        # 2. Selección de usuario a eliminar
-        lista_usuarios = df_usuarios['usuario'].tolist()
-        usuario_a_borrar = st.selectbox("Seleccione el usuario que desea eliminar:", [""] + lista_usuarios)
-        
-        if usuario_a_borrar:
-            # Buscamos los detalles para confirmar
-            user_info = df_usuarios[df_usuarios['usuario'] == usuario_a_borrar].iloc[0]
-            st.warning(f"⚠️ Está por eliminar a: **{user_info['nombre']}** (Rol: {user_info['rol']})")
-            
-            # Verificación de seguridad
-            if usuario_a_borrar == st.session_state.get('usuario_logueado'):
-                st.error("🚫 No puedes eliminar tu propia cuenta mientras estás en sesión.")
-            else:
-                confirmacion = st.checkbox(f"Confirmo que deseo eliminar permanentemente a {usuario_a_borrar}")
-                
-                if st.button("Eliminar Usuario", type="primary"):
-                    if confirmacion:
-                        cursor = conn.cursor()
-                        # Borramos al usuario
-                        cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (usuario_a_borrar,))
-                        
-                        # OPCIONAL: Si era un supervisor, quitamos la referencia en sus agentes
-                        cursor.execute("UPDATE usuarios SET supervisor_id = NULL WHERE supervisor_id = ?", (usuario_a_borrar,))
-                        
-                        conn.commit()
-                        st.success(f"✅ El usuario {usuario_a_borrar} ha sido eliminado del sistema.")
-                        st.rerun() # Recargamos para actualizar la lista
-                    else:
-                        st.info("Debe marcar la casilla de confirmación para proceder.")
-                        
-    except Exception as e:
-        st.error(f"Error al gestionar usuarios: {e}")
-    finally:
-        conn.close()
+                    st.success("Base de datos de salud vaciada correctamente.")
+
+    conn.close()
+
+# --- PUENTE PARA EL MAIN ---
+def bloque_9_admin():
+    bloque_9_admin_total()
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
@@ -1358,6 +1255,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
