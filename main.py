@@ -118,27 +118,8 @@ def bloque_9_admin():
                 st.success(f"Contraseña de {u_mod} actualizada correctamente.")
             else:
                 st.error("Las contraseñas no coinciden o el campo está vacío.")
-
-# 6. FUNCIÓN PRINCIPAL Y MENÚ (Llamada al final de tu archivo)
-def main():
-    inicializar_db()
-    
-    st.sidebar.title("🏥 APS Orán 2026")
-    opcion = st.sidebar.selectbox("Seleccione Sección:", 
-                                  ["Dashboard", "1. Censo", "2. Materno", "4. Vacunas", "9. Admin"])
-    
-    if opcion == "Dashboard":
-        bloque_0_dashboard()
-    elif opcion == "9. Admin":
-        bloque_9_admin()
-    else:
-        # Aquí es donde tus 2000 líneas de formularios se conectan
-        st.info(f"Sección {opcion} activa. Cargando formularios personalizados...")
-        # Llama aquí a tus funciones de censo, materno, etc.
-
-if __name__ == "__main__":
-    main()
-# ==========================================
+                
+===============================
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
@@ -1880,6 +1861,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
