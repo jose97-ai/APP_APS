@@ -71,47 +71,6 @@ def bloque_0_inicio():
             else: st.success("✅ Vacunación al día.")
     finally:
         conn.close()
-# --- 4. CONTROL DE NAVEGACIÓN (RECONECTANDO TODOS LOS BLOQUES) ---
-def main():
-    inicializar_db()  # Mantiene tu base de datos al día
-    
-    st.sidebar.title("Menú APS Orán")
-    
-    # Lista completa de tus bloques (Asegúrate de que el nombre coincida)
-    menu = [
-        "🏠 Inicio", 
-        "📝 Bloque 1: Censo/Vivienda", 
-        "💉 Bloque 2: Vacunación",
-        "🤰 Bloque 3: Salud Materna",
-        "👶 Bloque 4: Salud Infantil",
-        "🦠 Bloque 5: TBC",
-        "📉 Bloque 6: Estadísticas",
-        "🗺️ Bloque 7: Mapas",
-        "⚙️ Bloque 11: Configuración"
-    ]
-    
-    opcion = st.sidebar.selectbox("Seleccione Módulo:", menu)
-    
-    # Lógica para mostrar cada bloque
-    if opcion == "🏠 Inicio":
-        bloque_0_inicio()
-    
-    elif opcion == "📝 Bloque 1: Censo/Vivienda":
-        # Aquí llamas a la función que contiene tu Bloque 1
-        # Por ejemplo: bloque_1_censo() 
-        st.write("### Módulo de Censo y Vivienda")
-        # Pega o llama aquí a tu código original del bloque 1
-
-    elif opcion == "💉 Bloque 2: Vacunación":
-        st.write("### Registro de Vacunas")
-        # bloque_2_vacunas()
-
-    # Repite para los demás bloques...
-    # elif opcion == "🦠 Bloque 5: TBC":
-    #     bloque_5_tbc()
-
-if __name__ == "__main__":
-    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1554,6 +1513,8 @@ def main():
         else:
             st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
 
+if __name__ == "__main__":
+    main()
 
 
 
