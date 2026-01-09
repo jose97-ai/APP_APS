@@ -248,6 +248,38 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
+    st.title("🏠 Panel de Control APS")
+    
+    conn = sqlite3.connect('aps_oran_final.db')
+    
+    # Cálculos rápidos para las métricas
+    total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
+    
+    # Alerta de Vacunas (Niños > 2 meses sin registros)
+    # Esta es la lógica que pediste para el dashboard
+    ninos_sin_vacuna = pd.read_sql("""
+        SELECT COUNT(*) as cant FROM integrantes 
+        WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
+    """, conn).iloc[0]['cant']
+
+    # Layout de "Tarjetas" (Métricas)
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Censados", f"{total_personas} pers.")
+    
+    with col2:
+        # Si hay más de 0, se muestra en rojo (inverse_delta=True)
+        st.metric("Alerta Vacunas", f"{ninos_sin_vacuna} niños", delta="- Riesgo", delta_color="inverse")
+        
+    with col3:
+        # Ejemplo de otra alerta de salud
+        st.metric("Casos TBC", "2 activos", delta="Prioridad")
+
+    st.divider()
+    st.info("💡 Consejo: Diríjase al Bloque 11 para ver el listado nominal de los niños en mora.")
+    conn.close()
+def bloque_0_dashboard():
     st.title("🏥 Panel de Control APS - Orán")
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -1741,6 +1773,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
