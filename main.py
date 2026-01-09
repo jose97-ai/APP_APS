@@ -248,62 +248,33 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
-    st.title("🏠 Panel de Control APS - Orán")
+    st.title("🏠 Panel de Control APS")
     
     try:
-        # Usamos un context manager (with) para asegurar que la conexión se cierre sola
-        with sqlite3.connect('aps_oran_final.db') as conn:
-            # 1. MÉTRICAS PRINCIPALES
-            # Total de personas
-            df_total = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn)
-            total_personas = df_total.iloc[0]['total']
-            
-            # Alerta de Vacunas (Lógica solicitada el 07/01/2026)
-            # Buscamos integrantes que no estén en la tabla de vacunas
-            query_vacunas = """
+        conn = sqlite3.connect('aps_oran_final.db')
+        # Consulta simple para probar la conexión
+        total = pd.read_sql("SELECT COUNT(*) as cant FROM integrantes", conn).iloc[0]['cant']
+        
+        # Intentamos traer la alerta de vacunas (instrucción 07/01/2026)
+        try:
+            ninos_alerta = pd.read_sql("""
                 SELECT COUNT(*) as cant FROM integrantes 
                 WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-            """
-            ninos_sin_vacuna = pd.read_sql(query_vacunas, conn).iloc[0]['cant']
+            """, conn).iloc[0]['cant']
+        except:
+            ninos_alerta = 0
 
-            # Casos de TBC
-            try:
-                tbc_count = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
-            except:
-                tbc_count = 0
-
-            # 2. DISEÑO DE TARJETAS
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Población Total", f"{total_personas} hab.")
-            with col2:
-                # Color rojo (inverse) para alertar sobre vacunas faltantes
-                st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Pendientes", delta_color="inverse")
-            with col3:
-                st.metric("Casos TBC", f"{tbc_count} activos", delta="Prioridad")
-
-            st.divider()
-
-            # 3. RESUMEN DE ACTIVIDAD
-            st.subheader("📊 Resumen de Carga por Agente")
-            query_agentes = """
-                SELECT registrado_por as Agente, COUNT(dni) as Total 
-                FROM integrantes 
-                GROUP BY registrado_por 
-                ORDER BY Total DESC LIMIT 5
-            """
-            df_agentes = pd.read_sql(query_agentes, conn)
-            
-            if not df_agentes.empty:
-                st.bar_chart(df_agentes.set_index('Agente'))
-            else:
-                st.info("No hay datos suficientes para mostrar el gráfico de agentes.")
-
+        # Mostramos métricas básicas
+        c1, c2 = st.columns(2)
+        c1.metric("Población Total", f"{total} hab.")
+        c2.metric("Alerta Vacunas", f"{ninos_alerta} niños", delta_color="inverse")
+        
+        conn.close()
     except Exception as e:
-        st.error(f"Error al cargar el Dashboard: {e}")
-        st.info("Asegúrese de que la base de datos 'aps_oran_final.db' existe y tiene las tablas correctas.")
-
-    st.info("💡 **Dato:** Puede ver el listado detallado de alertas en el **Bloque 11: Vigilancia**.")
+        st.error(f"Error de base de datos: {e}")
+    
+    st.write("---")
+    st.info("Utilice la barra lateral izquierda para navegar entre bloques.")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1695,6 +1666,7 @@ def main():
 # Estas líneas deben estar pegadas al margen izquierdo, sin un solo espacio antes.
 if __name__ == "__main__":
     main()
+
 
 
 
