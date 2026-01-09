@@ -1665,6 +1665,8 @@ def main():
 # PASO D: El arranque oficial (PEGADO AL MARGEN IZQUIERDO)
 if __name__ == "__main__":
     main()
+st.sidebar.error("PRUEBA DE VIDA: SI LEES ESTO EL MENÚ FUNCIONA")
+st.write("### Si lees esto, el código llegó hasta el final")
 
 
 
