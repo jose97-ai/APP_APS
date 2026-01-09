@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import hashlib
-import plotly.express as px
 from datetime import datetime, date, timedelta
 
-# 1. CONFIGURACIÓN ÚNICA
+# 1. CONFIGURACIÓN INICIAL (DEBE SER LA PRIMERA LÍNEA EJECUTABLE)
 st.set_page_config(
     page_title="APS Orán 2026",
     page_icon="🏥",
@@ -13,123 +12,180 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. ESTILOS CSS
+# 2. ESTILOS CSS PARA MÉTRICAS Y TARJETAS
 st.markdown("""
     <style>
     .main { background-color: #F5F5F5; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #2E7D32; }
+    .stMetric { 
+        background-color: white; 
+        padding: 20px; 
+        border-radius: 12px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        border-left: 5px solid #2E7D32; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. MOTOR DE BASE DE DATOS UNIFICADO
+# 3. MOTOR DE BASE DE DATOS Y REPARACIÓN DE TABLAS
 def obtener_conexion():
     return sqlite3.connect('aps_oran_final.db')
 
 def inicializar_db():
+    """Crea y actualiza la estructura de la base de datos"""
     conn = obtener_conexion()
     cursor = conn.cursor()
-    # Tablas con todas las columnas necesarias para el Dashboard
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT, registrado_por TEXT)")
+    
+    # Reparación automática si falta la columna 'ronda' (Evita el OperationalError)
+    try:
+        cursor.execute("SELECT ronda FROM integrantes LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("DROP TABLE IF EXISTS integrantes")
+
+    # Creación de tablas con estructura completa
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS integrantes (
+            dni TEXT PRIMARY KEY, 
+            nombre TEXT, 
+            f_nac TEXT, 
+            nro_casa TEXT, 
+            ronda TEXT, 
+            registrado_por TEXT
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS viviendas (
+            nro_casa TEXT PRIMARY KEY, 
+            prioridad TEXT, 
+            registrado_por TEXT
+        )
+    """)
+    
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     
-    # Insertar Admin por defecto
+    # Datos por defecto: Admin (Clave: oran2026) y Ronda inicial
     admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
     cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)", 
                   ('admin', 'Admin Orán', 'Administrador', admin_pass))
-    
-    # Ronda inicial
     cursor.execute("INSERT OR IGNORE INTO config (clave, valor) VALUES ('ronda_actual', '1')")
     
     conn.commit()
     conn.close()
 
-# 4. FUNCIONES DE SOPORTE
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
 def obtener_ronda_info():
     try:
         conn = obtener_conexion()
         res = conn.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
         conn.close()
-        return (res[0] if res else "1", "Activa")
-    except: return ("1", "Activa")
+        return res[0] if res else "1"
+    except: return "1"
 
-# 5. BLOQUE 0: DASHBOARD (Versión Definitiva)
+# 4. BLOQUE 0: DASHBOARD (PANEL DE CONTROL)
 def bloque_0_dashboard():
-    st.title("🏥 Panel de Control APS - Orán")
+    st.title("🏠 Panel de Control APS - Orán")
     
-    # Botón de emergencia para ver si funciona (solo si está todo en 0)
+    # Botón de prueba para inyectar datos y verificar métricas
     if st.sidebar.button("🧪 Cargar Datos de Prueba"):
         conn = obtener_conexion()
-        conn.execute("INSERT OR IGNORE INTO integrantes VALUES ('1', 'Juan Pérez', '2024-05-10', 'Casa 1', '1', 'Agente 1')")
-        conn.execute("INSERT OR IGNORE INTO viviendas VALUES ('Casa 1', 'Alta', 'Agente 1')")
+        conn.execute("INSERT OR REPLACE INTO integrantes (dni, nombre, f_nac, nro_casa, ronda, registrado_por) VALUES ('1', 'Niño Prueba', '2024-05-10', '10', '1', 'Admin')")
+        conn.execute("INSERT OR REPLACE INTO viviendas (nro_casa, prioridad, registrado_por) VALUES ('10', 'Alta', 'Admin')")
         conn.commit()
         conn.close()
         st.rerun()
 
     conn = obtener_conexion()
     try:
-        # Métricas
-        p = pd.read_sql("SELECT COUNT(*) as c FROM integrantes", conn).iloc[0]['c']
-        v = pd.read_sql("SELECT COUNT(*) as c FROM viviendas", conn).iloc[0]['c']
-        r, _ = obtener_ronda_info()
+        # Consulta de datos para métricas
+        total_p = pd.read_sql("SELECT COUNT(*) as c FROM integrantes", conn).iloc[0]['c']
+        total_v = pd.read_sql("SELECT COUNT(*) as c FROM viviendas", conn).iloc[0]['c']
+        ronda_act = obtener_ronda_info()
 
-        # Recuadros (Métricas)
+        # Renderizado de métricas en 3 columnas
         c1, c2, c3 = st.columns(3)
-        c1.metric("👥 Población Censada", f"{p} pers.")
-        c2.metric("🏠 Viviendas Relevadas", f"{v} casas")
-        c3.metric("📅 Ronda Actual", f"N° {r}")
+        c1.metric("👥 Población Censada", f"{total_p} pers.")
+        c2.metric("🏠 Viviendas Relevadas", f"{total_v}")
+        c3.metric("📅 Ronda Actual", f"N° {ronda_act}")
 
         st.divider()
 
-        # Alertas (Pedido 07/01/2026)
-        col1, col2 = st.columns(2)
+        # ALERTAS CRÍTICAS (Instrucción 07/01/2026)
+        col_a, col_b = st.columns(2)
         
-        with col1:
+        with col_a:
             st.subheader("🚩 Riesgo Habitacional")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
             if not df_r.empty:
-                st.error(f"Hay {len(df_r)} viviendas en riesgo.")
+                st.error(f"⚠️ {len(df_r)} viviendas con riesgo")
                 st.table(df_r)
-            else: st.success("Sin riesgos críticos.")
+            else:
+                st.success("✅ Sin riesgos críticos.")
 
-        with col2:
-            st.subheader("👶 Alerta de Vacunación")
+        with col_b:
+            st.subheader("👶 Alerta de Vacunación Infantil")
             fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
-            # Esta query busca niños que NO están en la tabla vacunas
-            q_v = f"""
+            # Busca niños < 5 años que no figuren en la tabla de vacunas
+            query_v = f"""
                 SELECT nombre, nro_casa FROM integrantes 
                 WHERE f_nac > '{fecha_corte}' 
                 AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
             """
-            df_v = pd.read_sql(q_v, conn)
+            df_v = pd.read_sql(query_v, conn)
             if not df_v.empty:
                 st.warning(f"⚠️ {len(df_v)} niños con vacunas pendientes")
-                st.dataframe(df_v)
-            else: st.success("Esquemas completos.")
+                st.dataframe(df_v, use_container_width=True)
+            else:
+                st.success("✅ Vacunación al día en menores.")
 
     except Exception as e:
-        st.error(f"Error cargando datos: {e}")
+        st.info("Iniciando sistema... Cargue datos para visualizar estadísticas.")
     finally:
         conn.close()
 
-# 6. BLOQUE 9: ADMIN (Pedido 07/01/2026)
+# 5. BLOQUE 9: ADMINISTRACIÓN (Manual de Claves 07/01/2026)
 def bloque_9_admin():
-    st.title("⚙️ Administración")
-    st.subheader("🔐 Cambio de Contraseña")
-    with st.form("pass_form"):
-        u = st.text_input("Usuario")
-        p1 = st.text_input("Nueva Clave", type="password")
-        p2 = st.text_input("Confirmar Clave", type="password")
-        if st.form_submit_button("Guardar"):
-            if p1 == p2 and u:
-                conn = obtener_conexion()
-                h = hashlib.sha256(str.encode(p1)).hexdigest()
-                conn.execute("UPDATE usuarios SET password=? WHERE usuario=?", (h, u))
-                conn.commit()
-                conn.close()
-                st.success("Clave actualizada")
+    st.title("⚙️ Administración del Sistema")
+    
+    # Pestaña para cambio de contraseña solicitado
+    with st.expander("🔐 Gestión de Seguridad y Usuarios", expanded=True):
+        st.write("Desde aquí puede resetear las claves de acceso de los Agentes Sanitarios.")
+        with st.form("form_claves"):
+            u_target = st.text_input("Usuario a modificar")
+            p_new = st.text_input("Nueva Contraseña", type="password")
+            p_conf = st.text_input("Confirmar Contraseña", type="password")
+            
+            if st.form_submit_button("Actualizar"):
+                if p_new == p_conf and u_target != "":
+                    conn = obtener_conexion()
+                    h = hash_password(p_new)
+                    conn.execute("UPDATE usuarios SET password=? WHERE usuario=?", (h, u_target))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"✅ Contraseña de {u_target} actualizada.")
+                else:
+                    st.error("Las claves no coinciden o el campo está vacío.")
+
+# 6. FUNCIÓN PRINCIPAL Y MENÚ
+def main():
+    inicializar_db() # Reparación y arranque de tablas
+    
+    st.sidebar.title("🏥 APS Orán 2026")
+    menu = ["🏠 Dashboard", "📝 Bloque 1: Censo", "⚙️ Bloque 9: Admin"]
+    seleccion = st.sidebar.selectbox("Seleccione Módulo:", menu)
+    
+    if seleccion == "🏠 Dashboard":
+        bloque_0_dashboard()
+    elif seleccion == "⚙️ Bloque 9: Admin":
+        bloque_9_admin()
+    elif seleccion == "📝 Bloque 1: Censo":
+        st.write("Cargue aquí su código del Bloque 1...")
+
+if __name__ == "__main__":
+    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1575,6 +1631,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
