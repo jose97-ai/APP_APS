@@ -1345,23 +1345,25 @@ def bloque_8_seguimiento_agentes():
 # ==========================================
 # BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS
 # ==========================================
-# Cambia la definición de la función:
-def bloque_9_admin():  # <-- Cámbiale el nombre aquí
+def bloque_9_admin():
     if st.session_state.get('usuario_logueado') != 'admin':
-        st.error("🚫 Acceso denegado.")
+        st.error("🚫 Acceso denegado. Se requieren permisos de administrador.")
         return
-    # ... (el resto del código igual)
 
-    st.title("⚙️ Gestión Superior APS")
+    st.title("⚙️ Gestión Superior APS - Orán")
+    
+    # Conexión a la base de datos
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # Creamos la tabla de asignaciones si no existe
+    # Aseguramos que la tabla de auditoría exista al cargar el bloque
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS asignaciones (
-            supervisor TEXT,
-            agente TEXT,
-            PRIMARY KEY (supervisor, agente)
+        CREATE TABLE IF NOT EXISTS auditoria (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha TEXT,
+            usuario TEXT,
+            accion TEXT,
+            detalles TEXT
         )
     """)
     conn.commit()
@@ -1383,94 +1385,18 @@ def bloque_9_admin():  # <-- Cámbiale el nombre aquí
                 if u_borrar != 'admin':
                     cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (u_borrar,))
                     cursor.execute("DELETE FROM asignaciones WHERE supervisor = ? OR agente = ?", (u_borrar, u_borrar))
+                    # Auditoría
+                    cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (?, ?, ?, ?)",
+                                 (pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"), st.session_state.usuario_logueado, 
+                                  "ELIMINAR_USUARIO", f"Se eliminó al usuario: {u_borrar}"))
                     conn.commit()
                     st.success(f"Usuario {u_borrar} eliminado.")
                     st.rerun()
+                else:
+                    st.warning("No se puede eliminar al usuario administrador principal.")
         
         with col_pass:
-            u_pass = st.selectbox("Cambiar Clave de:", [""] + df_u['usuario'].tolist())
-            nueva_p = st.text_input("Nueva Clave:", type="password")
-            if st.button("Guardar Clave") and u_pass and nueva_p:
-                cursor.execute("UPDATE usuarios SET password = ? WHERE usuario = ?", (nueva_p, u_pass))
-                conn.commit()
-                st.success("Contraseña actualizada.")
-
-    # --- PESTAÑA 2: ASIGNAR AGENTES A SUPERVISORES ---
-    with tab_jerarquia:
-        st.subheader("Estructura de Trabajo")
-        
-        # Obtenemos listas separadas
-        supervisores = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='supervisor'").fetchall()]
-        agentes = [u[0] for u in cursor.execute("SELECT usuario FROM usuarios WHERE rol='agente'").fetchall()]
-
-        if not supervisores or not agentes:
-            st.info("Debe tener al menos un Supervisor y un Agente creados para asignar.")
-        else:
-            col_sup, col_age = st.columns(2)
-            with col_sup:
-                sup_sel = st.selectbox("Seleccione Supervisor:", supervisores)
-            with col_age:
-                age_sel = st.multiselect("Seleccione Agentes a cargo:", agentes)
-
-            if st.button("Guardar Asignación de Grupo"):
-                # Borramos asignaciones previas de este supervisor para actualizar
-                cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (sup_sel,))
-                for a in age_sel:
-                    cursor.execute("INSERT INTO asignaciones (supervisor, agente) VALUES (?, ?)", (sup_sel, a))
-                conn.commit()
-                st.success(f"Grupo de trabajo de {sup_sel} actualizado.")
-
-            # Mostrar tabla de jerarquía actual
-            st.write("---")
-            st.write("**Mapa de Supervisión Actual:**")
-            df_asig = pd.read_sql("SELECT supervisor as 'Supervisor', agente as 'Agente a Cargo' FROM asignaciones", conn)
-            st.table(df_asig)
-
-    # --- PESTAÑA 3: ACTUALIZAR NÚMERO DE RONDA ---
-    with tab_rondas:
-        st.subheader("Control de Ronda Epidemiológica")
-        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-        r_actual = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
-        r_val = r_actual[0] if r_actual else "1"
-        
-        st.info(f"Ronda grabada actualmente: **{r_val}**")
-        nueva_r = st.number_input("Establecer nuevo número de Ronda:", min_value=1, value=int(r_val))
-        
-        if st.button("Cerrar Ronda y Empezar Nueva"):
-            cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (str(nueva_r),))
-            conn.commit()
-            st.success(f"El sistema ahora opera bajo la Ronda N° {nueva_r}")
-
-    # --- PESTAÑA 4: RESET DE PRUEBAS ---
-    with tab_limpieza:
-        st.subheader("Reinicio de Datos")
-        if st.checkbox("Habilitar borrado de tablas"):
-            pass_confirm = st.text_input("Escriba 'BORRAR TODO' para confirmar:")
-            if st.button("EJECUTAR LIMPIEZA") and pass_confirm == "BORRAR TODO":
-                tablas = ['integrantes', 'viviendas', 'vacunas', 'asignaciones', 'config']
-                for t in tablas:
-                    cursor.execute(f"DROP TABLE IF EXISTS {t}")
-                conn.commit()
-                st.success("Sistema en 0. Refresque con F5.")
-
-    conn.close()
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
+            u_pass = st.selectbox("Cambiar Clave de:", [""] + df_u['usuario'].tolist
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
@@ -1584,6 +1510,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
