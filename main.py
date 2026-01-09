@@ -444,47 +444,42 @@ def bloque_2_materno():
         finally:
             conn.close()
 # ==========================================
-# BLOQUE 3: VIVIENDA (CÓDIGO COMPLETO)
+# BLOQUE 3: VIVIENDA (VERSIÓN DETALLADA APS)
 # ==========================================
 def bloque_3_vivienda():
-    st.header("🏠 Relevamiento de Condiciones de Vivienda")
+    st.header("🏠 Relevamiento de Vivienda y Saneamiento")
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # 1. CREACIÓN DE TABLA VIVIENDA (Si no existe)
+    # 1. CREACIÓN/ACTUALIZACIÓN DE TABLA VIVIENDA
+    # Incluimos tipos de agua, prioridad y fecha de visita
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS viviendas (
             nro_casa TEXT PRIMARY KEY,
             tipo_techo TEXT,
             tipo_piso TEXT,
-            agua_red TEXT,
+            fuente_agua TEXT,
             baño_tipo TEXT,
-            gas_tipo TEXT,
+            prioridad TEXT,
             registrado_por TEXT,
-            fecha_relevamiento TEXT
+            fecha_visita TEXT
         )
     """)
     conn.commit()
 
     # 2. SELECCIÓN DE CASA
-    nro_casa_v = st.text_input("Ingrese Número de Casa / APS para evaluar:", 
-                                help="Debe coincidir con el número usado en el Censo")
+    nro_casa_v = st.text_input("Ingrese Número de Casa / APS:", help="Debe coincidir con el Censo")
 
     if nro_casa_v:
-        # Verificamos si la casa existe en el censo (Bloque 1)
-        query_check = "SELECT nombre FROM integrantes WHERE nro_casa = ? LIMIT 1"
-        res = cursor.execute(query_check, (nro_casa_v,)).fetchone()
+        # Verificamos si la casa existe en el censo
+        res = cursor.execute("SELECT nombre FROM integrantes WHERE nro_casa = ? LIMIT 1", (nro_casa_v,)).fetchone()
 
         if res:
-            st.success(f"✅ Casa localizada. Familia de: {res[0]}")
+            st.success(f"✅ Familia de: {res[0]}")
             
-            # Buscamos si ya tiene datos cargados previamente
-            cursor.execute("SELECT * FROM viviendas WHERE nro_casa = ?", (nro_casa_v,))
-            datos_previos = cursor.fetchone()
-
             # 3. FORMULARIO DE CONDICIONES
-            with st.form("form_vivienda_detalle"):
-                st.subheader("🛠️ Detalles de Infraestructura")
+            with st.form("form_vivienda_aps"):
+                st.subheader("🛠️ Infraestructura y Riesgo")
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -492,35 +487,46 @@ def bloque_3_vivienda():
                                        ["Chapa", "Losa/Material", "Madera", "Paja/Barro", "Fibrocemento"])
                     piso = st.selectbox("Material del Piso:", 
                                       ["Cemento", "Mosaico/Cerámico", "Tierra", "Ladrillo"])
-                    agua = st.radio("¿Tiene Agua de Red?", ["Sí", "No"], horizontal=True)
+                    # Tipos de agua detallados
+                    agua = st.selectbox("Fuente de Agua:", [
+                        "Red pública (dentro de la vivienda)",
+                        "Red pública (fuera de la vivienda)",
+                        "Pozo con bomba",
+                        "Pozo abierto/Balde",
+                        "Agua de lluvia/Canal",
+                        "Camión cisterna"
+                    ])
 
                 with col2:
                     baño = st.selectbox("Tipo de Baño:", 
-                                       ["Interior con descarga", "Letrina", "Pozo ciego", "Cámara Séptica"])
-                    gas = st.selectbox("Tipo de Combustible:", 
-                                      ["Gas de Red", "Garrafa", "Leña/Carbón"])
+                                       ["Interior con descarga", "Letrina", "Pozo ciego", "Cámara Séptica", "Cielo Abierto"])
+                    # Campo de Prioridad
+                    prioridad = st.select_slider("Grado de Prioridad / Riesgo:", 
+                                               options=["Baja", "Media", "Alta", "CRÍTICA"])
+                    fecha_v = st.date_input("Fecha de Visita:", value=date.today())
 
                 if st.form_submit_button("Guardar Datos de Vivienda"):
                     usuario = st.session_state.get('usuario_logueado', 'admin')
-                    hoy = datetime.now().strftime("%d/%m/%Y %H:%M")
                     
                     try:
                         cursor.execute("""
                             INSERT OR REPLACE INTO viviendas 
-                            (nro_casa, tipo_techo, tipo_piso, agua_red, baño_tipo, gas_tipo, registrado_por, fecha_relevamiento)
+                            (nro_casa, tipo_techo, tipo_piso, fuente_agua, baño_tipo, prioridad, registrado_por, fecha_visita)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (nro_casa_v, techo, piso, agua, baño, gas, usuario, hoy))
+                        """, (nro_casa_v, techo, piso, agua, baño, prioridad, usuario, fecha_v.isoformat()))
                         conn.commit()
-                        st.success(f"📌 Datos de la Casa {nro_casa_v} actualizados correctamente.")
+                        st.success(f"📌 Visita a Casa {nro_casa_v} guardada. Prioridad: {prioridad}")
                     except Exception as e:
                         st.error(f"Error al guardar: {e}")
             
-            # 4. VISTA DE RESUMEN
-            if datos_previos:
-                st.info(f"Última actualización de esta vivienda: {datos_previos[7]} por {datos_previos[6]}")
+            # Mostrar datos actuales si ya existen
+            cursor.execute("SELECT prioridad, fecha_visita FROM viviendas WHERE nro_casa = ?", (nro_casa_v,))
+            check_data = cursor.fetchone()
+            if check_data:
+                st.info(f"Última visita registrada: {check_data[1]} - Prioridad actual: {check_data[0]}")
         
         else:
-            st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo. Primero debe registrar a los integrantes en el Bloque 1.")
+            st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo.")
 
     conn.close()
 # ==========================================
@@ -1266,6 +1272,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
