@@ -1396,7 +1396,7 @@ def bloque_9_admin():
                     st.warning("No se puede eliminar al usuario administrador principal.")
         
         with col_pass:
-            u_pass = st.selectbox("Cambiar Clave de:", [""] + df_u['usuario'].tolist
+            u_pass = st.selectbox("Cambiar Clave de:", [""] + df_u['usuario'].tolist())
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
@@ -1510,6 +1510,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
