@@ -4,64 +4,58 @@ import sqlite3
 import hashlib
 from datetime import datetime, date, timedelta
 
-# --- 1. CONFIGURACIÓN ÚNICA (Solo una vez al inicio) ---
-if 'config_lista' not in st.session_state:
+# --- 1. CONFIGURACIÓN INICIAL (Solo debe aparecer una vez) ---
+if 'config_ok' not in st.session_state:
     st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
-    st.session_state.config_lista = True
+    st.session_state.config_ok = True
 
-# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN (Tu código original corregido) ---
-def conectar_y_reparar():
+# --- 2. MOTOR DE BASE DE DATOS (Repara columnas del 07/01/2026) ---
+def inicializar_db():
+    """Función unificada para evitar el NameError"""
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # 1. Crear tablas base
+    # Crear tablas base
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
 
-    # 2. Función interna para agregar columnas faltantes
-    def agregar_col(tabla, columna, tipo):
+    # Función para reparar columnas sin borrar datos
+    def reparar_col(tabla, columna, tipo):
         cursor.execute(f"PRAGMA table_info({tabla})")
         columnas = [info[1] for info in cursor.fetchall()]
         if columna not in columnas:
             cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
 
-    # 3. Reparar Viviendas
-    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
-        agregar_col("viviendas", c, "TEXT")
+    # Columnas necesarias para el Dashboard de Inicio
+    for c in ["nombre", "f_nac", "nro_casa", "ronda"]:
+        reparar_col("integrantes", c, "TEXT")
+    for c in ["prioridad", "registrado_por"]:
+        reparar_col("viviendas", c, "TEXT")
     
-    # 4. Reparar Integrantes
-    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
-        agregar_col("integrantes", c, "TEXT")
-
-    # 5. Reparar Vacunas
-    for c in ["vacuna", "dosis", "fecha", "lote", "ronda", "registrado_por"]:
-        agregar_col("vacunas", c, "TEXT")
-
-    # Asegurar Admin por defecto
-    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
+    # Usuario Admin por defecto
+    admin_p = hashlib.sha256(str.encode('oran2026')).hexdigest()
     cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, rol, password) VALUES (?,?,?)", 
-                  ('admin', 'Administrador', admin_pass))
+                  ('admin', 'Administrador', admin_p))
 
     conn.commit()
     return conn
 
-# 3. PANTALLA DE INICIO (Bloque 0)
+# --- 3. BLOQUE 0: INICIO (Alertas de Vacunación) ---
 def bloque_0_inicio():
     st.title("🏥 Sistema APS Orán - Inicio")
     conn = inicializar_db()
     
     try:
-        # Métricas
-        res_p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        res_v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+        # Métricas principales
+        p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Población", f"{res_p} pers.")
-        c2.metric("Viviendas", f"{res_v}")
+        c1.metric("Población Total", f"{p} pers.")
+        c2.metric("Casas Visitadas", v)
         c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
 
         st.divider()
@@ -69,33 +63,33 @@ def bloque_0_inicio():
         # Alertas críticas
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("🚩 Riesgo Habitacional")
+            st.subheader("🚩 Viviendas en Riesgo")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            st.dataframe(df_r, use_container_width=True) if not df_r.empty else st.success("Sin riesgos")
+            st.dataframe(df_r, use_container_width=True) if not df_r.empty else st.success("Sin alertas.")
 
         with col2:
             st.subheader("👶 Alerta Vacunación (<5 años)")
-            corte = (date.today() - timedelta(days=5*365)).isoformat()
-            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{corte}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
+            limite = (date.today() - timedelta(days=5*365)).isoformat()
+            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
             df_v = pd.read_sql(query, conn)
-            st.warning(f"{len(df_v)} niños pendientes") if not df_v.empty else st.success("Al día")
+            st.warning(f"{len(df_v)} niños pendientes") if not df_v.empty else st.success("Al día.")
     finally:
         conn.close()
 
-# 4. FUNCIÓN PRINCIPAL (MAIN)
+# --- 4. FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
 def main():
-    # Ahora esta función sí existe y se llama correctamente
+    # Esta llamada ahora sí funcionará (Línea 1467 corregida)
     inicializar_db() 
     
-    st.sidebar.title("Menú Principal")
-    # Menú como 'Inicio' como pediste
+    st.sidebar.title("Menú APS")
+    # Cambiado a 'Inicio'
     opcion = st.sidebar.selectbox("Seleccione:", ["🏠 Inicio", "📝 Registro Censo"])
     
     if opcion == "🏠 Inicio":
         bloque_0_inicio()
     elif opcion == "📝 Registro Censo":
         st.write("---")
-        # Aquí continúa tu código del Bloque 1
+        # Aquí continúa el código de tu Censo
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1541,4 +1535,5 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
