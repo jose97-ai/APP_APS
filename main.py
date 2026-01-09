@@ -294,7 +294,6 @@ def bloque_0_dashboard():
 
     # 3. ACCESO RÁPIDO
     st.info("💡 **Consejo para Supervisor:** Los detalles nominales de los niños sin vacunas están en el **Bloque 11: Vigilancia**.")
-    
     conn.close()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
@@ -1697,6 +1696,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
