@@ -1,4 +1,19 @@
 import streamlit as st
+import streamlit as st
+import pandas as pd
+import sqlite3
+
+# --- FORZAR MENÚ AL PRINCIPIO ---
+st.sidebar.title("🏥 Navegación APS")
+opciones_menu = [
+    "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+    "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+    "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+    "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+]
+# Esto creará la barra lateral ANTES de leer cualquier bloque
+menu_global = st.sidebar.selectbox("Seleccione Bloque:", opciones_menu)
+st.sidebar.divider()
 
 # 1. ESTO DEBE SER LA PRIMERA LÍNEA DE CÓDIGO DE STREAMLIT
 st.set_page_config(page_title="APS Orán", layout="wide")
@@ -1665,6 +1680,7 @@ def main():
 # Asegúrate de que no haya espacios antes de 'if' ni antes de 'main()'
 if __name__ == "__main__":
     main()
+
 
 
 
