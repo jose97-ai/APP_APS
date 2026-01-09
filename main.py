@@ -1,4 +1,4 @@
-iimport streamlit as st
+import streamlit as st
 import pandas as pd
 import sqlite3
 import hashlib
@@ -1593,6 +1593,7 @@ def main():
             bloque_11_vigilancia_epidemiologica()
         else:
             st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
+
 
 
 
