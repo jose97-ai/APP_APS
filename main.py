@@ -3,7 +3,23 @@ import pandas as pd
 import sqlite3
 import hashlib
 from datetime import datetime, date, timedelta
+def obtener_ronda_info():
+    """Retorna la ronda actual y el año para los formularios (Línea 206)"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    try:
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+        cursor.execute("SELECT valor FROM config WHERE clave = 'ronda_actual'")
+        ronda = cursor.fetchone()
+        return (ronda[0] if ronda else "1"), 2026
+    except:
+        return "1", 2026
+    finally:
+        conn.close()
 
+def obtener_conexion():
+    """Función de conexión estándar para todos los bloques"""
+    return sqlite3.connect('aps_oran_final.db')
 # --- 1. CONFIGURACIÓN ÚNICA ---
 # Evita que se ejecute la configuración más de una vez
 if 'config_lista' not in st.session_state:
@@ -1429,15 +1445,13 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # NAVEGACION
 # ==========================================
-def conectar_y_reparar():
-    return sqlite3.connect('aps_oran_final.db')
-
 def main():
-    inicializar_db()  # Asegura que las tablas y las alertas del 07/01 existan
+    # Inicialización necesaria
+    if 'inicializar_db' in globals():
+        inicializar_db()
     
     st.sidebar.title("🏥 APS Orán 2026")
     
-    # Cambiado Dashboard por Inicio para cumplir con tu pedido
     opciones = [
         "🏠 Inicio", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
         "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
@@ -1445,32 +1459,28 @@ def main():
         "🚨 11. Vigilancia Epidemiológica"
     ]
     
-    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
+    # El 'key' evita el error de DuplicateElementId
+    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="selector_principal_v3")
 
-    # --- CONEXIÓN DE LOS BLOQUES (Nombres vinculados a la lista 'opciones') ---
+    # --- NAVEGACIÓN ---
     if seleccion == "🏠 Inicio":
-        bloque_0_inicio() # Muestra alertas de niños y riesgos
+        if 'bloque_0_inicio' in globals():
+            bloque_0_inicio()
+        else:
+            st.info("Bienvenido. Seleccione un módulo para comenzar.")
 
     elif seleccion == "📝 1. Censo":
-        if 'bloque_1_censo' in globals(): bloque_1_censo()
-        elif 'censo' in globals(): censo()
-        else: st.error("No se encontró la función de Censo")
+        if 'bloque_1_censo' in globals(): globals()['bloque_1_censo']()
+        elif 'censo' in globals(): globals()['censo']()
 
     elif seleccion == "🤰 2. Embarazadas":
-        if 'bloque_2_materno' in globals(): bloque_2_materno()
-        elif 'embarazadas' in globals(): embarazadas()
-        else: st.error("No se encontró la función de Embarazadas")
+        if 'bloque_2_materno' in globals(): globals()['bloque_2_materno']()
 
     elif seleccion == "🏠 3. Viviendas":
-        if 'bloque_3_viviendas' in globals(): bloque_3_viviendas()
-        elif 'viviendas' in globals(): viviendas()
-        elif 'formulario_viviendas' in globals(): formulario_viviendas()
-        else: st.warning("Sección Viviendas: No encontré la función.")
+        if 'bloque_3_viviendas' in globals(): globals()['bloque_3_viviendas']()
 
     elif seleccion == "💉 4. Vacunación":
-        if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
-        elif 'vacunacion' in globals(): vacunacion()
-        else: st.error("No se encontró la función de Vacunación")
+        if 'bloque_4_vacunas' in globals(): globals()['bloque_4_vacunas']()
 
     elif seleccion == "🍎 5. Nutrición":
         if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
@@ -1514,3 +1524,4 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
