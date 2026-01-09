@@ -224,16 +224,25 @@ def bloque_0_dashboard():
 # BLOQUE 1: CENSO (ACTUALIZADO CON RONDA)
 # ==========================================
 def bloque_1_censo():
-    # Asumimos que el usuario está guardado en st.session_state
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin') 
-    
-    # 1. Recuperamos la Ronda Actual (usando la función que creamos antes)
-    ronda_actual_valor, _ = obtener_ronda_info()
+    # 1. Conexión inicial para reparaciones y datos
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
 
-    st.header(f"📋 Bloque 1: Censo - Ronda N° {ronda_actual_valor}")
-    st.caption(f"Agente: {usuario_actual}")
+    # --- REPARACIÓN DE SEGURIDAD (PONER AQUÍ) ---
+    cursor.execute("PRAGMA table_info(integrantes)")
+    columnas = [info[1] for info in cursor.fetchall()]
     
-    tab1, tab2 = st.tabs(["📝 Registrar Integrante", "🔍 Gestión de Mis Cargas"])
+    if "ronda" not in columnas:
+        try:
+            cursor.execute("ALTER TABLE integrantes ADD COLUMN ronda TEXT DEFAULT '1'")
+            conn.commit()
+        except: pass
+
+    if "registrado_por" not in columnas:
+        try:
+            cursor.execute("ALTER TABLE integrantes ADD COLUMN registrado_por TEXT")
+            conn.commit()
+        except: pass
     
     # --- PESTAÑA 1: REGISTRO ---
     with tab1:
@@ -1253,6 +1262,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
