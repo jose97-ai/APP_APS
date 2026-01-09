@@ -1457,16 +1457,17 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # NAVEGACION
 # ==========================================
-# Esto crea un "puente" para que cuando el código busque 'conectar_y_reparar', use la función nueva
 def conectar_y_reparar():
     return sqlite3.connect('aps_oran_final.db')
+
 def main():
     inicializar_db()  # Asegura que las tablas y las alertas del 07/01 existan
     
     st.sidebar.title("🏥 APS Orán 2026")
     
+    # Cambiado Dashboard por Inicio para cumplir con tu pedido
     opciones = [
-        "🏠 Dashboard", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
+        "🏠 Inicio", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
         "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
         "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
         "🚨 11. Vigilancia Epidemiológica"
@@ -1474,9 +1475,9 @@ def main():
     
     seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
 
-    # --- CONEXIÓN DE LOS BLOQUES ---
+    # --- CONEXIÓN DE LOS BLOQUES (Nombres vinculados a la lista 'opciones') ---
     if seleccion == "🏠 Inicio":
-        bloque_0_inicio() # Muestra alertas de niños y claves
+        bloque_0_inicio() # Muestra alertas de niños y riesgos
 
     elif seleccion == "📝 1. Censo":
         if 'bloque_1_censo' in globals(): bloque_1_censo()
@@ -1489,15 +1490,15 @@ def main():
         else: st.error("No se encontró la función de Embarazadas")
 
     elif seleccion == "🏠 3. Viviendas":
-        # Intentamos varios nombres para que aparezca tu contenido
         if 'bloque_3_viviendas' in globals(): bloque_3_viviendas()
         elif 'viviendas' in globals(): viviendas()
         elif 'formulario_viviendas' in globals(): formulario_viviendas()
-        else: st.warning("Sección Viviendas: No encontré la función. Revisa cómo la nombraste (ej: def viviendas():)")
+        else: st.warning("Sección Viviendas: No encontré la función.")
 
     elif seleccion == "💉 4. Vacunación":
         if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
         elif 'vacunacion' in globals(): vacunacion()
+        else: st.error("No se encontró la función de Vacunación")
 
     elif seleccion == "🍎 5. Nutrición":
         if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
@@ -1515,27 +1516,33 @@ def main():
         if 'bloque_10_stats' in globals(): bloque_10_stats()
         elif 'bloque_7_stats' in globals(): bloque_7_stats()
         elif 'estadisticas' in globals(): estadisticas()
+        else: st.error("No se encontró la función de Estadísticas")
 
     elif seleccion == "👥 8. Seguimiento Agentes":
         if 'bloque_8_seguimiento' in globals(): bloque_8_seguimiento()
         elif 'seguimiento' in globals(): seguimiento()
 
     elif seleccion == "⚙️ 9. Admin":
-        bloque_9_admin()
+        # Se asume que bloque_9_admin ya está definida arriba
+        if 'bloque_9_admin' in globals(): bloque_9_admin()
+        else: st.error("Función Admin no encontrada")
 
     elif seleccion == "🚀 10. Gestión Avanzada":
         if 'bloque_10_gestion_avanzada' in globals():
             bloque_10_gestion_avanzada()
         else:
-            st.error("Error de conexión: Verifica que 'def bloque_10_gestion_avanzada():' esté bien escrito arriba.")
+            st.error("Error: 'def bloque_10_gestion_avanzada():' no encontrada.")
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
         if 'bloque_11_vigilancia_epidemiologica' in globals():
             bloque_11_vigilancia_epidemiologica()
         else:
-            st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
+            st.error("Error: 'def bloque_11_vigilancia_epidemiologica():' no encontrada.")
+
+# Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
 
 
