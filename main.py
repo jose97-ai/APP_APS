@@ -1,3 +1,27 @@
+def obtener_ronda_info():
+    """Retorna la ronda actual y el año para ser usados en los formularios"""
+    conn = inicializar_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT valor FROM config WHERE clave = 'ronda_actual'")
+        ronda = cursor.fetchone()
+        ronda_val = ronda[0] if ronda else "1"
+        return ronda_val, datetime.now().year
+    except:
+        return "1", 2026
+    finally:
+        conn.close()
+
+def obtener_usuarios():
+    """Retorna lista de usuarios para los selects de agentes"""
+    conn = inicializar_db()
+    try:
+        df = pd.read_sql("SELECT usuario FROM usuarios", conn)
+        return df['usuario'].tolist() if not df.empty else ["admin"]
+    except:
+        return ["admin"]
+    finally:
+        conn.close()
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -1514,6 +1538,7 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
 
 
