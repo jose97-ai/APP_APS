@@ -16,6 +16,39 @@ def inicializar_base_de_datos():
         
     conn.commit()
     conn.close()
+def inicializar_base_de_datos():
+    try:
+        with sqlite3.connect('aps_oran_final.db') as conn:
+            cursor = conn.cursor()
+            # Creamos todas las tablas necesarias con sus columnas correctas
+            cursor.execute("""CREATE TABLE IF NOT EXISTS usuarios 
+                           (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)""")
+            
+            cursor.execute("""CREATE TABLE IF NOT EXISTS integrantes 
+                           (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)""")
+            
+            cursor.execute("""CREATE TABLE IF NOT EXISTS viviendas 
+                           (nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT)""")
+            
+            cursor.execute("""CREATE TABLE IF NOT EXISTS vacunas 
+                           (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, ronda TEXT, registrado_por TEXT)""")
+            
+            cursor.execute("""CREATE TABLE IF NOT EXISTS asignaciones 
+                           (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))""")
+            
+            cursor.execute("""CREATE TABLE IF NOT EXISTS config 
+                           (clave TEXT PRIMARY KEY, valor TEXT)""")
+            
+            # Usuario admin por defecto
+            cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin123', 'admin')")
+            conn.commit()
+    except Exception as e:
+        st.error(f"Error crítico al crear tablas: {e}")
+
+# Ejecutar SIEMPRE al inicio del main()
+def main():
+    inicializar_base_de_datos()
+    # ... resto del código
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -1487,6 +1520,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
