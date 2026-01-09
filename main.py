@@ -1,3 +1,22 @@
+def login():
+    st.title("🔐 Acceso al Sistema APS")
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+    
+    if st.button("Ingresar"):
+        conn = obtener_conexion()
+        # Verificamos en la tabla de usuarios que creamos en inicializar_db
+        user_db = conn.execute("SELECT * FROM usuarios WHERE usuario = ? AND password = ?", 
+                               (usuario, password)).fetchone()
+        conn.close()
+        
+        if user_db:
+            st.session_state.autenticado = True
+            st.session_state.usuario_actual = usuario
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
+    return False
 import sqlite3
 
 # Esta función es la que el Bloque 7 (y otros) está reclamando
@@ -1512,4 +1531,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
