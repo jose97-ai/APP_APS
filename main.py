@@ -1,4 +1,15 @@
 import streamlit as st
+import pandas as pd
+import sqlite3
+import hashlib  
+import plotly.express as px
+from datetime import datetime, date
+
+# Después de las importaciones, pones tus funciones de apoyo
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+    
+import streamlit as st
 
 st.set_page_config(
     page_title="APS Orán 2026",
@@ -1242,6 +1253,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
