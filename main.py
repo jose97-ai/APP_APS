@@ -1146,6 +1146,105 @@ def bloque_9_admin():
             df_u = pd.read_sql("SELECT usuario, nombre, rol, supervisor_id as 'Supervisor Cargo' FROM usuarios", conn)
             st.dataframe(df_u, use_container_width=True)
             conn.close()
+            # ==========================================
+# PANEL DE MANTENIMIENTO (MODO DESARROLLADOR)
+# ==========================================
+def bloque_mantenimiento_db():
+    st.title("🛠️ Mantenimiento de Base de Datos")
+    st.warning("Cuidado: Estas acciones son irreversibles y afectan a todo el sistema.")
+
+    tab_borrado, tab_reset = st.tabs(["🗑️ Borrar Individual", "🔥 Reset Total"])
+
+    with tab_borrado:
+        st.subheader("Eliminar un registro específico")
+        dni_borrar = st.text_input("Ingrese el DNI del integrante a eliminar:")
+        confirmar_dni = st.checkbox("Confirmo que deseo borrar este DNI y todo su historial de salud")
+        
+        if st.button("Borrar Registro", type="primary"):
+            if dni_borrar and confirmar_dni:
+                try:
+                    conn = sqlite3.connect('aps_oran_final.db')
+                    cursor = conn.cursor()
+                    # Borrado en cascada manual
+                    tablas = ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']
+                    for t in tablas:
+                        cursor.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_borrar,))
+                    
+                    conn.commit()
+                    conn.close()
+                    st.success(f"DNI {dni_borrar} eliminado correctamente de todas las tablas.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+            else:
+                st.info("Debe ingresar un DNI y marcar la casilla de confirmación.")
+
+    with tab_reset:
+        st.subheader("Limpieza total de la Base de Datos")
+        st.error("ESTO BORRARÁ TODA LA INFORMACIÓN DEL CENSO Y SALUD (excepto usuarios)")
+        
+        seguridad = st.text_input("Escriba 'BORRAR TODO' para habilitar el botón:")
+        if seguridad == "BORRAR TODO":
+            if st.button("EJECUTAR LIMPIEZA TOTAL", type="primary"):
+                try:
+                    conn = sqlite3.connect('aps_oran_final.db')
+                    cursor = conn.cursor()
+                    tablas = ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']
+                    for t in tablas:
+                        cursor.execute(f"DELETE FROM {t}")
+                    conn.commit()
+                    conn.close()
+                    st.success("Base de datos reseteada. El sistema está limpio para iniciar el trabajo oficial.")
+                except Exception as e:
+                    st.error(f"Error técnico: {e}")
+                    # ==========================================
+# GESTIÓN DE USUARIOS: ELIMINACIÓN
+# ==========================================
+def seccion_gestionar_usuarios():
+    st.subheader("👥 Gestión de Usuarios (Bajas)")
+    
+    conn = sqlite3.connect('aps_oran_final.db')
+    
+    try:
+        # 1. Mostrar lista de usuarios actuales para referencia
+        df_usuarios = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
+        st.dataframe(df_usuarios, use_container_width=True)
+        
+        st.divider()
+        
+        # 2. Selección de usuario a eliminar
+        lista_usuarios = df_usuarios['usuario'].tolist()
+        usuario_a_borrar = st.selectbox("Seleccione el usuario que desea eliminar:", [""] + lista_usuarios)
+        
+        if usuario_a_borrar:
+            # Buscamos los detalles para confirmar
+            user_info = df_usuarios[df_usuarios['usuario'] == usuario_a_borrar].iloc[0]
+            st.warning(f"⚠️ Está por eliminar a: **{user_info['nombre']}** (Rol: {user_info['rol']})")
+            
+            # Verificación de seguridad
+            if usuario_a_borrar == st.session_state.get('usuario_logueado'):
+                st.error("🚫 No puedes eliminar tu propia cuenta mientras estás en sesión.")
+            else:
+                confirmacion = st.checkbox(f"Confirmo que deseo eliminar permanentemente a {usuario_a_borrar}")
+                
+                if st.button("Eliminar Usuario", type="primary"):
+                    if confirmacion:
+                        cursor = conn.cursor()
+                        # Borramos al usuario
+                        cursor.execute("DELETE FROM usuarios WHERE usuario = ?", (usuario_a_borrar,))
+                        
+                        # OPCIONAL: Si era un supervisor, quitamos la referencia en sus agentes
+                        cursor.execute("UPDATE usuarios SET supervisor_id = NULL WHERE supervisor_id = ?", (usuario_a_borrar,))
+                        
+                        conn.commit()
+                        st.success(f"✅ El usuario {usuario_a_borrar} ha sido eliminado del sistema.")
+                        st.rerun() # Recargamos para actualizar la lista
+                    else:
+                        st.info("Debe marcar la casilla de confirmación para proceder.")
+                        
+    except Exception as e:
+        st.error(f"Error al gestionar usuarios: {e}")
+    finally:
+        conn.close()
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
@@ -1259,6 +1358,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
