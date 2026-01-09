@@ -95,7 +95,23 @@ import sqlite3
 import pandas as pd
 import pydeck as pdk
 from datetime import datetime, date
-
+def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # FUNCIONES DE SOPORTE (Copiar antes del Bloque 0)
 # ==========================================
@@ -129,7 +145,23 @@ def obtener_ronda_info():
     finally:
         conn.close()
     return ronda_manual, ronda_sugerida
-
+def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
@@ -201,6 +233,23 @@ def bloque_0_dashboard():
         except:
             st.info("Sin datos de vacunas aún.")
 
+    conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
     conn.close()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
@@ -315,6 +364,23 @@ def bloque_1_censo():
         st.table(df_reciente)
 
     conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS (ACTUALIZADO)
 # ==========================================
@@ -425,6 +491,23 @@ def bloque_2_materno():
             st.error("Error al cargar la tabla. Asegúrese de que los DNI existan en el Censo (Bloque 1).")
         finally:
             conn.close()
+            def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 3: VIVIENDA (CON TENENCIA Y REPARACIÓN)
 # ==========================================
@@ -528,6 +611,23 @@ def bloque_3_vivienda():
             st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo.")
 
     conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 4: VACUNAS (CALENDARIO COMPLETO)
 # ==========================================
@@ -615,6 +715,23 @@ def bloque_4_vacunas():
         else:
             st.warning("⚠️ El DNI no figura en el censo.")
 
+    conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
     conn.close()
 # ==========================================
 # BLOQUE 5: NUTRICIÓN (IMC, RONDAS Y EQUIPOS)
@@ -713,6 +830,23 @@ def bloque_5_nutricion():
         conn.close()
     else:
         st.info("👋 Ingrese un DNI para comenzar la evaluación antropométrica.")
+        def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 6: TBC (ESTRATEGIA DOTS Y RONDAS)
 # ==========================================
@@ -815,6 +949,23 @@ def bloque_6_tbc():
         conn.close()
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
+        def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 7: ESTADÍSTICAS DETALLADAS (APS)
 # ==========================================
@@ -910,6 +1061,23 @@ def bloque_7_estadisticas():
     * **Población Total:** {tot_t}
     """)
 
+    conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
     conn.close()
 # ==========================================
 # BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
@@ -1042,6 +1210,23 @@ def bloque_8_analisis():
 def bloque_8_supervisor(): bloque_8_analisis()
 def bloque_8_mapas(): bloque_8_analisis()
 def bloque_8_analisis_agente(): bloque_8_analisis()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
+    conn.close()
 # ==========================================
 # BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS
 # ==========================================
@@ -1153,6 +1338,23 @@ def bloque_9_admin():  # <-- Cámbiale el nombre aquí
                 conn.commit()
                 st.success("Sistema en 0. Refresque con F5.")
 
+    conn.close()
+    def inicializar_tablas_sistema():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Tabla de Personas
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    # Tabla de Vacunas
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Usuarios y Jerarquía
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    # Tabla de Configuración (Rondas)
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    conn.commit()
     conn.close()
 # ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
@@ -1267,6 +1469,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
