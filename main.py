@@ -1930,53 +1930,56 @@ def bloque_11_vigilancia_epidemiologica():
 # MOTOR DE NAVEGACIÓN (VERSIÓN DE RESCATE)
 # =================================================================
 def main():
-    # 1. Intentar reparar la base de datos sin detener la app
-    try:
-        conectar_y_reparar()
-    except:
-        pass
-
-    # 2. Configuración de la barra lateral
-    st.sidebar.title("🏥 Gestión APS Orán")
-    
+    # Menú de Navegación con los nuevos bloques incluidos
     opciones = [
-        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+        "🏠 Panel de Control", 
+        "📝 1. Censo", 
+        "🤰 2. Materno", 
+        "🏠 3. Vivienda", 
+        "💉 4. Vacunas", 
+        "⚖️ 5. Nutrición", 
+        "💊 6. TBC", 
+        "📊 7. Estadísticas", 
+        "🗺️ 8. Mapas", 
+        "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada",
+        "🚨 11. Vigilancia Alertas"
     ]
 
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="menu_definitivo_v1")
+    # Barra lateral
+    st.sidebar.title("Navegación APS")
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
 
-    # 3. LÓGICA DE NAVEGACIÓN SEGURA
-    # Esta lógica verifica si la función existe en tu código antes de intentar abrirla
-    
+    # Lógica de redirección (Asegúrate de que los nombres coincidan exactamente)
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
-    
-    elif "1. Censo" in menu:
-        if 'bloque_1_vivienda' in globals(): bloque_1_vivienda()
-        else: st.warning("La función 'bloque_1_vivienda' no se encuentra definida.")
+    elif menu == "📝 1. Censo":
+        bloque_1_vivienda() # O el nombre que uses para censo
+    elif menu == "🤰 2. Materno":
+        bloque_2_embarazo()
+    elif menu == "🏠 3. Vivienda":
+        bloque_3_vivienda()
+    elif menu == "💉 4. Vacunas":
+        bloque_4_vacunas()
+    elif menu == "⚖️ 5. Nutrición":
+        bloque_5_nutricion()
+    elif menu == "💊 6. TBC":
+        bloque_6_tbc()
+    elif menu == "📊 7. Estadísticas":
+        bloque_7_estadisticas()
+    elif menu == "🗺️ 8. Mapas":
+        bloque_8_seguimiento_agentes()
+    elif menu == "⚙️ 9. Admin":
+        bloque_9_configuracion()
+    elif menu == "🛠️ 10. Gestión Avanzada":
+        bloque_10_gestion_avanzada()
+    elif menu == "🚨 11. Vigilancia Alertas":
+        bloque_11_vigilancia_epidemiologica()
 
-    elif "9. Admin" in menu:
-        # Aquí es donde incluimos el cambio de contraseña (07/01/2026)
-        if 'bloque_9_configuracion' in globals(): bloque_9_configuracion()
-        else: st.info("Sección Admin: Configure aquí su nueva contraseña.")
-
-    elif "11. Vigilancia" in menu:
-        # Aquí es donde incluimos la alerta de niños (07/01/2026)
-        if 'bloque_11_vigilancia_alertas' in globals(): bloque_11_vigilancia_alertas()
-        else: st.info("Sección Vigilancia: Listado de niños con vacunas pendientes.")
-
-    else:
-        st.info(f"Has seleccionado {menu}. El contenido de este bloque se cargará aquí.")
-
-# DISPARADOR FINAL (Asegúrate de que NO tenga espacios a la izquierda)
+# Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Error crítico en la aplicación: {e}")
+    main()
+
 
 
 
