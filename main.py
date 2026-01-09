@@ -1,3 +1,21 @@
+def inicializar_base_de_datos():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Crear todas las tablas necesarias
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, ronda TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
+    
+    # Crear usuario admin por defecto si la tabla está vacía
+    res = cursor.execute("SELECT * FROM usuarios WHERE usuario='admin'").fetchone()
+    if not res:
+        cursor.execute("INSERT INTO usuarios VALUES ('admin', 'admin123', 'admin')")
+        
+    conn.commit()
+    conn.close()
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -1469,6 +1487,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
