@@ -1808,31 +1808,76 @@ def bloque_11_vigilancia_epidemiologica():
         conn.close()
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
-# ... dentro de main() ...
-    if menu == "🏠 Panel de Control":
+def main():
+    inicializar_db()  # Activa la base de datos y reparaciones automáticas
+    
+    st.sidebar.title("🏥 APS Orán 2026")
+    
+    # 1. LISTA COMPLETA DE OPCIONES (Incluyendo los que faltaban)
+    opciones = [
+        "🏠 Dashboard", 
+        "📝 1. Censo/Vivienda", 
+        "🤰 2. Materno/Embarazo", 
+        "👶 3. Nutrición",
+        "💉 4. Vacunación", 
+        "🦠 5. TBC/Vigilancia",
+        "🩸 6. Crónicos",
+        "👴 7. Adultos Mayores",
+        "🧠 8. Salud Mental",
+        "⚙️ 9. Admin/Seguridad",
+        "📊 10. Estadísticas",
+        "📋 11. Reportes"
+    ]
+    
+    seleccion = st.sidebar.selectbox("Ir a la sección:", opciones)
+
+    # 2. CONEXIÓN CON TUS FUNCIONES (Asegúrate que los nombres coincidan)
+    if seleccion == "🏠 Dashboard":
         bloque_0_dashboard()
-    elif "1. Censo" in menu:
-        bloque_1_vivienda()
-    elif "2. Materno" in menu:
-        bloque_2_materno()
-    elif "3. Vivienda" in menu:
-        bloque_3_vivienda()
-    elif "4. Vacunas" in menu:
-        bloque_4_vacunas()
-    elif "5. Nutrición" in menu:
-        bloque_5_nutricion()
-    elif "6. TBC" in menu:
-        bloque_6_tbc()
-    elif "7. Estadísticas" in menu:
-        bloque_7_estadisticas()
-    elif "8. Mapas" in menu:
-        bloque_8_mapas()
-    elif "9. Admin" in menu:
-        bloque_9_configuracion()
-    elif "10. Gestión" in menu:
-        bloque_10_gestion_avanzada()
-    elif "11. Vigilancia" in menu:
-        bloque_11_vigilancia_alertas()
+
+    elif seleccion == "📝 1. Censo/Vivienda":
+        if 'bloque_1_censo' in globals(): bloque_1_censo()
+        else: st.warning("No se encontró la función 'bloque_1_censo'")
+
+    elif seleccion == "🤰 2. Materno/Embarazo":
+        if 'bloque_2_materno' in globals(): bloque_2_materno()
+        else: st.warning("No se encontró la función 'bloque_2_materno'")
+
+    elif seleccion == "👶 3. Nutrición":
+        if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
+        else: st.info("Sección 3 lista para conectar.")
+
+    elif seleccion == "💉 4. Vacunación":
+        if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
+        else: st.warning("No se encontró la función 'bloque_4_vacunas'")
+
+    elif seleccion == "🦠 5. TBC/Vigilancia":
+        if 'bloque_5_tbc' in globals(): bloque_5_tbc()
+        else: st.info("Sección 5 lista para conectar.")
+
+    elif seleccion == "🩸 6. Crónicos":
+        if 'bloque_6_cronicos' in globals(): bloque_6_cronicos()
+        else: st.info("Sección 6 (Crónicos) lista para conectar.")
+
+    elif seleccion == "👴 7. Adultos Mayores":
+        if 'bloque_7_adultos' in globals(): bloque_7_adultos()
+        else: st.info("Sección 7 (Adultos Mayores) lista para conectar.")
+
+    elif seleccion == "🧠 8. Salud Mental":
+        if 'bloque_8_mental' in globals(): bloque_8_mental()
+        else: st.info("Sección 8 (Salud Mental) lista para conectar.")
+
+    elif seleccion == "⚙️ 9. Admin/Seguridad":
+        bloque_9_admin() # Este ya lo tenemos definido con el cambio de clave del 07/01
+
+    elif seleccion == "📊 10. Estadísticas":
+        if 'bloque_10_stats' in globals(): bloque_10_stats()
+        else: st.info("Sección 10 (Estadísticas) lista para conectar.")
+
+    elif seleccion == "📋 11. Reportes":
+        if 'bloque_11_reportes' in globals(): bloque_11_reportes()
+        else: st.info("Sección 11 (Reportes) lista para conectar.")
+
 if __name__ == "__main__":
     main()
 
