@@ -838,98 +838,71 @@ def bloque_6_tbc():
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: ESTADÍSTICAS OPERATIVAS (CORREGIDO)
+# BLOQUE 7: ESTADÍSTICAS Y TABLA POBLACIONAL
 # ==========================================
-def bloque_7_estadistica():
-    # 1. Información de sesión
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
-    
-    st.header("📊 Estadísticas del Sector")
-    
-    # Abrimos la conexión
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-
-    try:
-        # --- 2. MANTENIMIENTO PREVENTIVO (EVITA ERRORES DE COLUMNA) ---
-        cursor.execute("PRAGMA table_info(integrantes)")
-        cols_int = [info[1] for info in cursor.fetchall()]
-        if "sexo" not in cols_int:
-            cursor.execute("ALTER TABLE integrantes ADD COLUMN sexo TEXT DEFAULT 'No especificado'")
-        
-        cursor.execute("PRAGMA table_info(usuarios)")
-        cols_usr = [info[1] for info in cursor.fetchall()]
-        if "supervisor_id" not in cols_usr:
-            cursor.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
-        conn.commit()
-
-        # --- 3. FILTRADO SEGÚN ROL ---
-        if rol_actual in ["Supervisor", "Administrador"]:
-            df_eq = pd.read_sql("SELECT usuario FROM usuarios WHERE supervisor_id=? OR usuario=?", 
-                                conn, params=(usuario_actual, usuario_actual))
-            equipo = df_eq['usuario'].tolist() if not df_eq.empty else [usuario_actual]
-            placeholders = ', '.join(['?'] * len(equipo))
-            filtro_sql = f"WHERE registrado_por IN ({placeholders})"
-            params = equipo
-        else:
-            filtro_sql = "WHERE registrado_por = ?"
-            params = (usuario_actual,)
-
-        # --- 4. CARGA DE DATOS ---
-        df_integrantes = pd.read_sql(f"SELECT f_nac, sexo FROM integrantes {filtro_sql}", conn, params=params)
-        
-        if df_integrantes.empty:
-            st.warning("⚠️ No hay datos registrados para mostrar estadísticas.")
-        else:
-            tab1, tab2 = st.tabs(["👥 Población", "🌡️ Salud"])
-            
-            with tab1:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.write("**Género**")
-                    fig_sexo = px.pie(df_integrantes, names='sexo', hole=0.4)
-                    st.plotly_chart(fig_sexo, use_container_width=True)
-                with c2:
-                    st.write("**Edades**")
-                    def calc_edad(f):
-                        try: return date.today().year - datetime.strptime(f, '%Y-%m-%d').year
-                        except: return 0
-                    df_integrantes['edad'] = df_integrantes['f_nac'].apply(calc_edad)
-                    fig_edad = px.histogram(df_integrantes, x='edad', nbins=15)
-                    st.plotly_chart(fig_edad, use_container_width=True)
-
-            with tab2:
-                st.subheader("Indicadores Críticos")
-                m1, m2, m3 = st.columns(3)
-                
-                def conteo(tabla, extra=""):
-                    cursor.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{tabla}'")
-                    if cursor.fetchone()[0] == 1:
-                        res = pd.read_sql(f"SELECT count(*) as t FROM {tabla} {filtro_sql} {extra}", conn, params=params)
-                        return res['t'][0]
-                    return 0
-
-                m1.metric("TBC Activos", conteo('tbc', "AND estado='Activo'"))
-                m2.metric("Embarazadas", conteo('controles_embarazo'))
-                m3.metric("Bajo Peso", conteo('crecimiento', "AND imc < 18.5"))
-
-    except Exception as e:
-        st.error(f"Error en Bloque 7: {e}")
-    
-    finally:
-        # IMPORTANTE: El finally siempre cierra la conexión
-        conn.close()
-
-# --- PUENTE ---
 def bloque_7_estadisticas():
-    bloque_7_estadistica()
-        
-import streamlit as st
-import pandas as pd
-import sqlite3
-import plotly.express as px
-from datetime import datetime, date
+    st.title("📊 Análisis Estadístico de Población")
+    
+    conn = sqlite3.connect('aps_oran_final.db')
+    
+    # 1. Recuperar datos (necesitamos fecha de nacimiento y sexo)
+    query = "SELECT f_nac, sexo FROM integrantes"
+    df = pd.read_sql(query, conn)
+    
+    if df.empty:
+        st.warning("No hay datos cargados para generar la tabla estadística.")
+        conn.close()
+        return
+
+    # 2. Limpieza de datos y cálculo de edad
+    df['f_nac'] = pd.to_datetime(df['f_nac'], errors='coerce')
+    df = df.dropna(subset=['f_nac', 'sexo']) # Eliminamos registros incompletos para el cálculo
+    
+    def calcular_edad(fecha):
+        today = date.today()
+        return today.year - fecha.year - ((today.month, today.day) < (fecha.month, fecha.day))
+
+    df['edad'] = df['f_nac'].apply(calcular_edad)
+
+    # 3. Definir los Rangos de Edad Oficiales
+    bins = [0, 1, 6, 13, 20, 35, 50, 65, 120]
+    labels = ['< 1 año', '1-5 años', '6-12 años', '13-19 años', '20-34 años', '35-49 años', '50-64 años', '65+ años']
+    df['Rango Etario'] = pd.cut(df['edad'], bins=bins, labels=labels, right=False)
+
+    # 4. CREAR LA TABLA DE TOTALES (MASCULINO / FEMENINO)
+    st.subheader("📋 Tabla de Población por Edad y Sexo")
+    
+    # Creamos la tabla cruzada
+    tabla = pd.crosstab(df['Rango Etario'], df['sexo'], dropna=False)
+    
+    # Aseguramos que existan ambas columnas aunque no haya datos
+    if 'Masculino' not in tabla.columns: tabla['Masculino'] = 0
+    if 'Femenino' not in tabla.columns: tabla['Femenino'] = 0
+    
+    # Reordenamos columnas y añadimos Total por Fila
+    tabla = tabla[['Masculino', 'Femenino']]
+    tabla['Total'] = tabla['Masculino'] + tabla['Femenino']
+    
+    # Añadimos Fila de Totales Generales al final
+    totales_finales = pd.DataFrame({
+        'Masculino': [tabla['Masculino'].sum()],
+        'Femenino': [tabla['Femenino'].sum()],
+        'Total': [tabla['Total'].sum()]
+    }, index=['TOTAL GENERAL'])
+    
+    tabla_final = pd.concat([tabla, totales_finales])
+
+    # 5. MOSTRAR LA TABLA ESTILIZADA
+    st.table(tabla_final)
+
+    # 6. GRÁFICO COMPLEMENTARIO (Opcional)
+    st.divider()
+    fig = px.bar(df, x="Rango Etario", color="sexo", barmode="group",
+                 title="Distribución Visual por Grupos",
+                 labels={'count': 'Cantidad de Personas'})
+    st.plotly_chart(fig, use_container_width=True)
+
+    conn.close()
 
 # ==========================================
 # BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
@@ -1272,6 +1245,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
