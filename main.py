@@ -1577,13 +1577,14 @@ def main():
         elif "7. Estadísticas" in menu: bloque_7_estadisticas()
         elif "8. Mapas" in menu:
             if st.session_state["rol_usuario"] in ["Supervisor", "Administrador"]:
-                bloque_8_supervisor()
+      bloque_8_seguimiento_agentes()
             else:
                 bloque_8_analisis_agente()
         elif "9. Admin" in menu: bloque_9_admin()
 
 if __name__ == "__main__":
     main()
+
 
 
 
