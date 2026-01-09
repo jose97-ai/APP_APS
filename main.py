@@ -143,21 +143,6 @@ def bloque_0_dashboard():
         except:
             st.info("Sin datos de vacunas aún.")
     conn.close()
-
-# --- 5. EJECUCIÓN PRINCIPAL ---
-def main():
-    inicializar_db()
-    
-    st.sidebar.title("Navegación")
-    opcion = st.sidebar.selectbox("Seleccione Bloque", ["Dashboard", "Registro Censo"])
-    
-    if opcion == "Dashboard":
-        bloque_0_dashboard()
-    else:
-        st.write("Cargue aquí su Bloque 1...")
-
-if __name__ == "__main__":
-    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1603,6 +1588,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
