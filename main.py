@@ -1477,15 +1477,25 @@ def main():
         if 'bloque_2_materno' in globals(): globals()['bloque_2_materno']()
 
     elif seleccion == "🏠 3. Viviendas":
-        # Buscamos la función por todos los nombres que podrías haber usado
-        if 'bloque_3_viviendas' in globals(): 
-            globals()['bloque_3_viviendas']()
-        elif 'viviendas' in globals(): 
-            globals()['viviendas']()
-        elif 'bloque_viviendas' in globals(): 
-            globals()['bloque_viviendas']()
-        elif 'formulario_viviendas' in globals(): 
-            globals()['formulario_viviendas']()
+        # Agregamos los nombres más comunes que podrías tener
+        nombres_posibles = [
+            'bloque_3_viviendas', 'viviendas', 'bloque_viviendas', 
+            'formulario_viviendas', 'bloque3', 'registrar_viviendas'
+        ]
+        
+        encontrado = False
+        for nombre in nombres_posibles:
+            if nombre in globals():
+                globals()[nombre]()
+                encontrado = True
+                break
+        
+        if not encontrado:
+            st.error("⚠️ No se encontró la función.")
+            # Esto te ayudará a ver cómo se llaman tus funciones realmente:
+            with st.expander("Ver nombres de funciones disponibles"):
+                todas_las_funciones = [k for k, v in globals().items() if callable(v)]
+                st.write(todas_las_funciones)
         else: 
             st.error("⚠️ No se encontró la función de Viviendas. Revisa si en tu código dice 'def bloque_3_viviendas():' o algo similar.")
 
@@ -1534,5 +1544,6 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
 
