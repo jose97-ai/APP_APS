@@ -808,7 +808,7 @@ def bloque_6_tbc():
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: ESTADÍSTICAS (CORREGIDO)
+# BLOQUE 7: ESTADÍSTICAS OPERATIVAS
 # ==========================================
 def bloque_7_estadistica():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
@@ -816,15 +816,18 @@ def bloque_7_estadistica():
     
     st.header("📊 Estadísticas del Sector")
     
-    conn = sqlite3.connect('aps_oran_final.db')
-    
-    def tabla_existe(nombre_tabla):
-        c = conn.cursor()
-        c.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
-        return cursor_res := c.fetchone()[0] == 1
-
+    # Usamos un try-except general para capturar cortes de DB
     try:
-        # --- 1. LÓGICA DE FILTRADO ---
+        conn = sqlite3.connect('aps_oran_final.db')
+        
+        # --- FUNCIÓN DE SEGURIDAD CORREGIDA ---
+        def tabla_existe(nombre_tabla):
+            c = conn.cursor()
+            c.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name=?", (nombre_tabla,))
+            resultado = c.fetchone()[0]
+            return resultado == 1
+
+        # --- 1. LÓGICA DE FILTRADO SEGÚN ROL ---
         if rol_actual in ["Supervisor", "Administrador"]:
             df_eq = pd.read_sql("SELECT usuario FROM usuarios WHERE supervisor_id=? OR usuario=?", 
                                 conn, params=(usuario_actual, usuario_actual))
@@ -836,13 +839,12 @@ def bloque_7_estadistica():
             filtro_sql = "WHERE registrado_por = ?"
             params = (usuario_actual,)
 
-        # --- 2. CONSULTA BASE ---
+        # --- 2. CONSULTA Y GRÁFICOS ---
         df_integrantes = pd.read_sql(f"SELECT f_nac, sexo FROM integrantes {filtro_sql}", conn, params=params)
         
         if df_integrantes.empty:
-            st.info("Aún no hay integrantes registrados para generar estadísticas.")
+            st.info("ℹ️ No hay datos suficientes para mostrar estadísticas.")
         else:
-            # Layout de columnas para gráficos
             col1, col2 = st.columns(2)
             
             with col1:
@@ -852,44 +854,45 @@ def bloque_7_estadistica():
 
             with col2:
                 st.write("**Población por Edad**")
-                # Cálculo seguro de edad
+                # Cálculo de edad (protegido contra fechas nulas)
                 df_integrantes['edad'] = df_integrantes['f_nac'].apply(
                     lambda x: date.today().year - datetime.strptime(x, '%Y-%m-%d').year if x else 0
                 )
-                fig_edad = px.histogram(df_integrantes, x='edad', nbins=15)
+                fig_edad = px.histogram(df_integrantes, x='edad', nbins=15, color_discrete_sequence=['#00CC96'])
                 st.plotly_chart(fig_edad, use_container_width=True)
 
             st.divider()
 
-            # --- 3. INDICADORES DE PROGRAMAS ---
-            st.subheader("🌡️ Indicadores de Salud")
+            # --- 3. MÉTRICAS DE PROGRAMAS CRÍTICOS ---
+            st.subheader("🌡️ Indicadores de Cobertura")
             m1, m2, m3 = st.columns(3)
             
-            # Conteo TBC
+            # TBC
             if tabla_existe('tbc'):
                 tbc = pd.read_sql(f"SELECT count(*) as total FROM tbc {filtro_sql} AND estado='Activo'", conn, params=params)
-                m1.metric("TBC Activos", tbc['total'][0])
+                m1.metric("Casos TBC", tbc['total'][0])
             else:
-                m1.metric("TBC Activos", 0)
+                m1.metric("Casos TBC", "0*")
 
-            # Conteo Embarazadas
+            # Materno
             if tabla_existe('controles_embarazo'):
                 emb = pd.read_sql(f"SELECT count(DISTINCT dni) as total FROM controles_embarazo {filtro_sql}", conn, params=params)
                 m2.metric("Embarazadas", emb['total'][0])
             else:
-                m2.metric("Embarazadas", 0)
+                m2.metric("Embarazadas", "0*")
 
-            # Conteo Riesgo Nutricional
+            # Nutrición
             if tabla_existe('crecimiento'):
                 nut = pd.read_sql(f"SELECT count(*) as total FROM crecimiento {filtro_sql} AND imc < 18.5", conn, params=params)
                 m3.metric("Bajo Peso", nut['total'][0])
             else:
-                m3.metric("Bajo Peso", 0)
+                m3.metric("Bajo Peso", "0*")
 
     except Exception as e:
-        st.error(f"Error en estadísticas: {e}")
+        st.error(f"Error al cargar estadísticas: {e}")
     finally:
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
         
 import streamlit as st
 import pandas as pd
@@ -1255,6 +1258,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
