@@ -248,122 +248,53 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
-    st.title("🏠 Panel de Control APS")
+    st.title("🏠 Panel de Control APS - Orán")
     
     conn = sqlite3.connect('aps_oran_final.db')
     
-    # Cálculos rápidos para las métricas
+    # 1. MÉTRICAS PRINCIPALES
     total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
     
-    # Alerta de Vacunas (Niños > 2 meses sin registros)
-    # Esta es la lógica que pediste para el dashboard
+    # Alerta de Vacunas (Lógica según tu nota del 07/01/2026)
     ninos_sin_vacuna = pd.read_sql("""
         SELECT COUNT(*) as cant FROM integrantes 
         WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
     """, conn).iloc[0]['cant']
 
-    # Layout de "Tarjetas" (Métricas)
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.metric("Total Censados", f"{total_personas} pers.")
-    
+        st.metric("Población Total", f"{total_personas} hab.")
     with col2:
-        # Si hay más de 0, se muestra en rojo (inverse_delta=True)
-        st.metric("Alerta Vacunas", f"{ninos_sin_vacuna} niños", delta="- Riesgo", delta_color="inverse")
-        
+        # El delta en "inverse" pone el color rojo si el número es alto
+        st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Pendientes", delta_color="inverse")
     with col3:
-        # Ejemplo de otra alerta de salud
-        st.metric("Casos TBC", "2 activos", delta="Prioridad")
+        # Traemos casos de TBC reales de tu tabla
+        tbc_count = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
+        st.metric("Casos TBC", f"{tbc_count} activos", delta="Seguimiento")
 
     st.divider()
-    st.info("💡 Consejo: Diríjase al Bloque 11 para ver el listado nominal de los niños en mora.")
-    conn.close()
-def bloque_0_dashboard():
-    st.title("🏥 Panel de Control APS - Orán")
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
 
-    # 1. MÉTRICAS RÁPIDAS (Top Cards)
-    c1, c2, c3 = st.columns(3)
+    # 2. GRÁFICO DE PROGRESO DIARIO
+    st.subheader("📊 Censo en la última semana")
+    # Nota: Asumimos que tienes una columna 'fecha_registro' en integrantes
     try:
-        total_personas = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        total_casas = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        ronda_v, _ = obtener_ronda_info() # Función que ya tenemos
+        df_fecha = pd.read_sql("""
+            SELECT fecha_registro, COUNT(dni) as cantidad 
+            FROM integrantes 
+            GROUP BY fecha_registro 
+            ORDER BY fecha_registro DESC LIMIT 7
+        """, conn)
         
-        c1.metric("Población Censada", f"{total_personas} pers.")
-        c2.metric("Viviendas Relevadas", f"{total_casas}")
-        c3.metric("Ronda Actual", f"N° {ronda_v}")
+        if not df_fecha.empty:
+            st.line_chart(df_fecha.set_index('fecha_registro'))
+        else:
+            st.info("Aún no hay datos históricos para mostrar el gráfico.")
     except:
-        st.info("Iniciando sistema... Realice su primera carga para ver métricas.")
+        st.caption("Gráfico diario disponible al activar registro de fecha.")
 
-    st.divider()
-
-    # 2. SECCIÓN DE ALERTAS CRÍTICAS
-    col_alerta1, col_alerta2 = st.columns(2)
-
-    with col_alerta1:
-        st.subheader("🚩 Viviendas en Riesgo")
-        # Buscamos casas con prioridad Alta o CRÍTICA
-        try:
-            query_riesgo = """
-                SELECT nro_casa, prioridad, registrado_por 
-                FROM viviendas 
-                WHERE prioridad IN ('Alta', 'CRÍTICA')
-                ORDER BY prioridad DESC
-            """
-            df_riesgo = pd.read_sql(query_riesgo, conn)
-
-            if not df_riesgo.empty:
-                for _, row in df_riesgo.iterrows():
-                    color = "red" if row['prioridad'] == 'CRÍTICA' else "orange"
-                    st.error(f"**Casa {row['nro_casa']}** - Prioridad: {row['prioridad']} (Agente: {row['registrado_por']})")
-            else:
-                st.success("✅ No hay viviendas con riesgo crítico detectado.")
-        except:
-            st.info("Sin datos de viviendas aún.")
-
-    with col_alerta2:
-        st.subheader("👶 Alerta de Vacunación Infantil")
-        # Buscamos niños menores de 5 años sin vacunas registradas en la ronda actual
-        try:
-            # Calculamos fecha de corte para menores de 5 años
-            fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-            
-            query_vacunas = f"""
-                SELECT i.dni, i.nombre, i.nro_casa
-                FROM integrantes i
-                LEFT JOIN vacunas v ON i.dni = v.dni
-                WHERE i.f_nac > '{fecha_limite}' 
-                AND v.dni IS NULL
-            """
-            df_niños_sin_v = pd.read_sql(query_vacunas, conn)
-
-            if not df_niños_sin_v.empty:
-                st.warning(f"Hay {len(df_niños_sin_v)} niños menores de 5 años sin vacunas cargadas.")
-                st.dataframe(df_niños_sin_v[['nro_casa', 'nombre']], use_container_width=True)
-            else:
-                st.success("✅ Todos los niños censados tienen vacunas al día.")
-        except:
-            st.info("Sin datos de vacunas aún.")
-
-    conn.close()
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    # 3. ACCESO RÁPIDO
+    st.info("💡 **Consejo para Supervisor:** Los detalles nominales de los niños sin vacunas están en el **Bloque 11: Vigilancia**.")
     
-    conn.commit()
     conn.close()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
@@ -1773,6 +1704,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
