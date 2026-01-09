@@ -1,3 +1,37 @@
+def conectar_y_reparar():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    
+    # 1. Crear tablas base
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
+
+    # 2. Función interna para agregar columnas faltantes
+    def agregar_col(tabla, columna, tipo):
+        cursor.execute(f"PRAGMA table_info({tabla})")
+        columnas = [info[1] for info in cursor.fetchall()]
+        if columna not in columnas:
+            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+
+    # 3. Reparar cada tabla con las columnas que pediste
+    # Viviendas
+    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
+        agregar_col("viviendas", c, "TEXT")
+    
+    # Integrantes
+    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
+        agregar_col("integrantes", c, "TEXT")
+
+    # Vacunas
+    for c in ["vacuna", "dosis", "fecha", "lote", "ronda", "registrado_por"]:
+        agregar_col("vacunas", c, "TEXT")
+
+    conn.commit()
+    return conn
 def inicializar_base_de_datos():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -1520,6 +1554,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
