@@ -1660,10 +1660,12 @@ def bloque_11_vigilancia_epidemiologica():
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
 # ==========================================
-# NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
+# FUNCIÓN PRINCIPAL (EL MOTOR DEL MENÚ)
 # ==========================================
 def main():
-    # 1. Definir las opciones (esto crea el texto de la barra lateral)
+    # TEST DE VIDA: Si ves esto, el main() está funcionando
+    st.sidebar.success("✅ Sistema de Navegación Activo")
+    
     opciones = [
         "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
         "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
@@ -1671,46 +1673,26 @@ def main():
         "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # 2. Crear la barra lateral (SI FALTA ESTO, NO APARECE EL MENÚ)
-    st.sidebar.title("Navegación APS")
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
+    # Forzamos la barra lateral
+    with st.sidebar:
+        st.title("📌 Menú APS Orán")
+        menu = st.selectbox("Seleccione un Bloque:", opciones)
+        st.divider()
 
-    # 3. Lógica para mostrar cada bloque
+    # Lógica de salto (Asegúrate de que los nombres de las funciones existan arriba)
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
-    elif menu == "📝 1. Censo":
-        # Aquí va el nombre de tu función para el censo
-        bloque_1_censo() 
-    elif menu == "🤰 2. Materno":
-        bloque_2_embarazo()
-    elif menu == "🏠 3. Vivienda":
-        bloque_3_vivienda()
-    elif menu == "💉 4. Vacunas":
-        bloque_4_vacunas()
-    elif menu == "⚖️ 5. Nutrición":
-        bloque_5_nutricion()
-    elif menu == "💊 6. TBC":
-        bloque_6_tbc()
-    elif menu == "📊 7. Estadísticas":
-        bloque_7_estadisticas()
-    elif menu == "🗺️ 8. Mapas":
-        bloque_8_seguimiento_agentes()
-    elif menu == "⚙️ 9. Admin":
-        bloque_9_configuracion()
     elif menu == "🛠️ 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
     elif menu == "🚨 11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
+    else:
+        st.info(f"Sección en desarrollo: {menu}")
 
-# Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
+# ESTAS DOS LÍNEAS SON LAS MÁS IMPORTANTES DE TODO EL ARCHIVO
+# DEBEN ESTAR AL FINAL DE TODO Y SIN ESPACIOS A LA IZQUIERDA
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
 
 
 
