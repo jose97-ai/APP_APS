@@ -1149,15 +1149,15 @@ def inicializar_tablas_sistema():
     
     conn.commit()
     conn.close()
+# ==========================================
+# BLOQUE 7: ESTADISTICAS 
+# ==========================================
 import pandas as pd
 import sqlite3
 import streamlit as st
 from datetime import datetime
 from fpdf import FPDF
 import base64
-# ==========================================
-# BLOQUE 7: ESTADISTICAS 
-# ==========================================
 def bloque_7_estadisticas():
     st.title("📊 Reporte Demográfico Detallado")
 
@@ -1387,11 +1387,13 @@ def inicializar_tablas_sistema():
     
     conn.commit()
     conn.close()
+# ==========================================
+# BLOQUE 8: MAPEO 
+# ==========================================
 import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
-
 def bloque_8_seguimiento_agentes():
     st.title("📍 Seguimiento de Actividades y Salud")
     st.markdown("---")
@@ -1626,7 +1628,6 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
-
 def bloque_10_gestion_avanzada():
     st.title("🛠️ Panel de Control y Gestión Avanzada")
     st.markdown("---")
@@ -1861,19 +1862,20 @@ def main():
         bloque_9_admin()
 
     elif seleccion == "🚀 10. Gestión Avanzada":
-        if 'bloque_10_gestion' in globals():
-            bloque_10_gestion()
+        if 'bloque_10_gestion_avanzada' in globals():
+            bloque_10_gestion_avanzada()
         else:
-            st.info("Contenido del Bloque 10 en preparación.")
+            st.error("Error de conexión: Verifica que 'def bloque_10_gestion_avanzada():' esté bien escrito arriba.")
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
-        if 'bloque_11_vigilancia' in globals():
-            bloque_11_vigilancia()
+        if 'bloque_11_vigilancia_epidemiologica' in globals():
+            bloque_11_vigilancia_epidemiologica()
         else:
-            st.info("Contenido del Bloque 11 en preparación.")
+            st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
 
-# ESTO DEBE ESTAR PEGADO AL BORDE IZQUIERDO, SIN ESPACIOS
+# Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
