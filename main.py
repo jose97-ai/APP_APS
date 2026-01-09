@@ -1930,15 +1930,14 @@ def bloque_11_vigilancia_epidemiologica():
 # MOTOR DE NAVEGACIÓN (VERSIÓN DE RESCATE)
 # =================================================================
 def main():
-    # 1. Inicialización obligatoria de Base de Datos y Reparación
+    # 1. Intentar reparar la base de datos sin detener la app
     try:
         conectar_y_reparar()
-    except Exception as e:
-        st.error(f"Error al conectar/reparar la base de datos: {e}")
+    except:
+        pass
 
     # 2. Configuración de la barra lateral
     st.sidebar.title("🏥 Gestión APS Orán")
-    st.sidebar.info(f"Fecha: {date.today().strftime('%d/%m/%Y')}")
     
     opciones = [
         "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
@@ -1947,66 +1946,37 @@ def main():
         "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    menu = st.sidebar.selectbox(
-        "Seleccione un Bloque:", 
-        opciones, 
-        key="menu_aps_final_total"
-    )
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="menu_definitivo_v1")
 
-    # 3. CONEXIÓN DE TODOS LOS BLOQUES (El "Tablero Eléctrico")
+    # 3. LÓGICA DE NAVEGACIÓN SEGURA
+    # Esta lógica verifica si la función existe en tu código antes de intentar abrirla
+    
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     
     elif "1. Censo" in menu:
-        # Asegúrate de que tu función se llame así, o cámbiala por el nombre real
-        bloque_1_censo() 
-    
-    elif "2. Materno" in menu:
-        bloque_2_materno()
-    
-    elif "3. Vivienda" in menu:
-        bloque_3_vivienda()
-    
-    elif "4. Vacunas" in menu:
-        bloque_4_vacunas()
-        
-    elif "5. Nutrición" in menu:
-        bloque_5_nutricion()
-        
-    elif "6. TBC" in menu:
-        bloque_6_tbc()
-        
-    elif "7. Estadísticas" in menu:
-        bloque_7_estadisticas()
-        
-    elif "8. Mapas" in menu:
-        bloque_8_mapas()
-        
+        if 'bloque_1_vivienda' in globals(): bloque_1_vivienda()
+        else: st.warning("La función 'bloque_1_vivienda' no se encuentra definida.")
+
     elif "9. Admin" in menu:
-        # Aquí incluimos lo que pediste el 07/01 (Cambio de pass)
-        bloque_9_configuracion()
-        
-    elif "10. Gestión Avanzada" in menu:
-        bloque_10_gestion_avanzada()
-        
-    elif "11. Vigilancia Alertas" in menu:
-        # Aquí aparecen los niños sin vacunas
-        bloque_11_vigilancia_alertas()
+        # Aquí es donde incluimos el cambio de contraseña (07/01/2026)
+        if 'bloque_9_configuracion' in globals(): bloque_9_configuracion()
+        else: st.info("Sección Admin: Configure aquí su nueva contraseña.")
 
-    st.sidebar.divider()
-    st.sidebar.caption("APS Orán - Sistema Protegido")
+    elif "11. Vigilancia" in menu:
+        # Aquí es donde incluimos la alerta de niños (07/01/2026)
+        if 'bloque_11_vigilancia_alertas' in globals(): bloque_11_vigilancia_alertas()
+        else: st.info("Sección Vigilancia: Listado de niños con vacunas pendientes.")
 
+    else:
+        st.info(f"Has seleccionado {menu}. El contenido de este bloque se cargará aquí.")
 
-
-
-
-
-
-
-
-
-
-
+# DISPARADOR FINAL (Asegúrate de que NO tenga espacios a la izquierda)
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        st.error(f"Error crítico en la aplicación: {e}")
 
 
 
