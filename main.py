@@ -808,152 +808,97 @@ def bloque_6_tbc():
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: CONTROL POBLACIONAL (ESTADÍSTICAS)
+# BLOQUE 7: ESTADÍSTICAS OPERATIVAS
 # ==========================================
 def bloque_7_estadistica():
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Agente') 
-
-    st.header(f"📊 Bloque 7: Control Poblacional (Vista: {rol_actual})")
+    rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
     
-    conn = obtener_conexion()
+    st.header("📊 Estadísticas del Sector")
     
-    # --- LÓGICA DE PRIVACIDAD Y JERARQUÍA ---
-    if rol_actual == "Administrador":
-        query = "SELECT f_nac, sexo FROM integrantes"
-        params = ()
-    elif rol_actual == "Supervisor":
-        equipo = obtener_equipo_agentes(usuario_actual)
-        placeholders = ', '.join(['?'] * len(equipo))
-        query = f"SELECT f_nac, sexo FROM integrantes WHERE registrado_por IN ({placeholders})"
-        params = equipo
-    else:
-        query = "SELECT f_nac, sexo FROM integrantes WHERE registrado_por = ?"
-        params = (usuario_actual,)
+    conn = sqlite3.connect('aps_oran_final.db')
+    
+    # --- FUNCIONES DE SEGURIDAD ---
+    def tabla_existe(nombre_tabla):
+        c = conn.cursor()
+        c.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
+        return c.fetchone()[0] == 1
 
-    df = pd.read_sql(query, conn, params=params)
-    conn.close()
+    try:
+        # 1. Filtro de Datos según Rol
+        if rol_actual in ["Supervisor", "Administrador"]:
+            # Intenta obtener equipo para ver estadísticas globales
+            df_eq = pd.read_sql("SELECT usuario FROM usuarios WHERE supervisor_id=? OR usuario=?", 
+                                conn, params=(usuario_actual, usuario_actual))
+            equipo = df_eq['usuario'].tolist() if not df_eq.empty else [usuario_actual]
+            placeholders = ', '.join(['?'] * len(equipo))
+            filtro_sql = f"WHERE registrado_por IN ({placeholders})"
+            params = equipo
+        else:
+            filtro_sql = "WHERE registrado_por = ?"
+            params = (usuario_actual,)
 
-    if not df.empty:
-        # 1. Procesamiento de Rangos Etarios (Exacto para APS)
-        lista_rangos = [
-            "0 a 5 meses", "6 a 11 meses", "1 año", "2 años", "3 años", 
-            "4 años", "5 años", "6 años", "7 a 9 años", "10 años", 
-            "11 años", "12 a 14 años", "15 a 19 años", "20 a 24 años", 
-            "25 a 29 años", "30 a 34 años", "35 a 39 años", "40 a 44 años", 
-            "45 a 49 años", "50 a 54 años", "55 a 59 años", "60 a 64 años", "65 y mas"
-        ]
-
-        def clasificar_exacto(f_nac_str):
-            try:
-                nac = datetime.strptime(f_nac_str, '%Y-%m-%d').date()
-                hoy = date.today()
-                anios = hoy.year - nac.year - ((hoy.month, hoy.day) < (nac.month, nac.day))
-                meses = (hoy.year - nac.year) * 12 + hoy.month - nac.month
-                if hoy.day < nac.day: meses -= 1
-
-                if anios == 0: return "0 a 5 meses" if meses <= 5 else "6 a 11 meses"
-                if anios == 1: return "1 año"
-                if anios in [2,3,4,5,6]: return f"{anios} años"
-                if 7 <= anios <= 9: return "7 a 9 años"
-                if anios == 10: return "10 años"
-                if anios == 11: return "11 años"
-                if 12 <= anios <= 14: return "12 a 14 años"
-                if 15 <= anios <= 19: return "15 a 19 años"
-                if 20 <= anios <= 24: return "20 a 24 años"
-                if 25 <= anios <= 29: return "25 a 29 años"
-                if 30 <= anios <= 34: return "30 a 34 años"
-                if 35 <= anios <= 39: return "35 a 39 años"
-                if 40 <= anios <= 44: return "40 a 44 años"
-                if 45 <= anios <= 49: return "45 a 49 años"
-                if 50 <= anios <= 54: return "50 a 54 años"
-                if 55 <= anios <= 59: return "55 a 59 años"
-                if 60 <= anios <= 64: return "60 a 64 años"
-                return "65 y mas"
-            except: return "Error"
-
-        df['Rango'] = df['f_nac'].apply(clasificar_exacto)
-
-        # 2. Construcción de la Matriz Consolidada
-        resumen = pd.DataFrame(index=lista_rangos, columns=['M', 'F']).fillna(0)
-        # Normalizamos sexo a 'M' y 'F' por si acaso
-        df['sexo'] = df['sexo'].map({'Masculino': 'M', 'Femenino': 'F', 'M': 'M', 'F': 'F'})
-        conteo = df.groupby(['Rango', 'sexo']).size().unstack(fill_value=0)
+        # 2. Carga de Datos Segura (Tablas principales)
+        st.subheader("📋 Resumen General")
         
-        for r in conteo.index:
-            if r in resumen.index:
-                for col in ['M', 'F']:
-                    if col in conteo.columns:
-                        resumen.at[r, col] = conteo.at[r, col]
+        # Conteo de Integrantes (Siempre debe existir)
+        df_integrantes = pd.read_sql(f"SELECT f_nac, sexo FROM integrantes {filtro_sql}", conn, params=params)
         
-        resumen['Total'] = resumen['M'] + resumen['F']
+        if df_integrantes.empty:
+            st.info("Aún no hay integrantes registrados para generar estadísticas.")
+            return
 
-        # 3. Visualización con Gráficos
-        st.subheader("📋 Consolidado Poblacional por Edad y Sexo")
-        st.table(resumen.astype(int))
-
+        # Visualización de Pirámide Poblacional o Edades
         col1, col2 = st.columns(2)
+        
         with col1:
-            st.subheader("Distribución por Género")
-            fig_sexo = px.pie(df, names='sexo', color='sexo', 
-                             color_discrete_map={'M':'#3498DB', 'F':'#E74C3C'},
-                             hole=0.4)
+            st.write("**Distribución por Sexo**")
+            fig_sexo = px.pie(df_integrantes, names='sexo', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_sexo, use_container_width=True)
 
         with col2:
-            st.subheader("Pirámide Poblacional")
-            df_plot = resumen.reset_index().melt(id_vars='index', value_vars=['M', 'F'], 
-                                               var_name='Sexo', value_name='Cantidad')
-            df_plot.columns = ['Rango', 'Sexo', 'Cantidad']
-            fig_bar = px.bar(df_plot, x='Rango', y='Cantidad', color='Sexo', barmode='group',
-                            color_discrete_map={'M': '#3498DB', 'F': '#E74C3C'})
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        # 4. Generación de Reporte PDF
-        def crear_pdf_aps(datos):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(200, 10, "INFORME APS - ORAN 2026", ln=True, align='C')
-            pdf.set_font("Arial", size=12)
-            pdf.cell(200, 10, f"Responsable: {usuario_actual} | Rol: {rol_actual}", ln=True, align='C')
-            pdf.cell(200, 10, f"Fecha de emision: {date.today()}", ln=True, align='C')
-            pdf.ln(10)
-            
-            # Encabezados de tabla
-            pdf.set_fill_color(52, 152, 219)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(60, 10, "Rango de Edad", 1, 0, 'C', True)
-            pdf.cell(40, 10, "Masc (M)", 1, 0, 'C', True)
-            pdf.cell(40, 10, "Fem (F)", 1, 0, 'C', True)
-            pdf.cell(40, 10, "Total", 1, 1, 'C', True)
-            
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Arial", size=10)
-            for i, r in datos.iterrows():
-                pdf.cell(60, 8, str(i), 1)
-                pdf.cell(40, 8, str(int(r['M'])), 1, 0, 'C')
-                pdf.cell(40, 8, str(int(r['F'])), 1, 0, 'C')
-                pdf.cell(40, 8, str(int(r['Total'])), 1, 1, 'C')
-            
-            # Pie de página
-            pdf.ln(10)
-            pdf.set_font("Arial", 'I', 8)
-            pdf.cell(0, 10, "Documento generado automaticamente por el Sistema Digital de APS Oran.", 0, 0, 'C')
-                
-            return pdf.output(dest='S').encode('latin-1', 'replace')
+            st.write("**Población por Edad**")
+            df_integrantes['edad'] = df_integrantes['f_nac'].apply(
+                lambda x: date.today().year - datetime.strptime(x, '%Y-%m-%d').year if x else 0
+            )
+            fig_edad = px.histogram(df_integrantes, x='edad', nbins=10, labels={'edad':'Años'}, color_discrete_sequence=['#1E88E5'])
+            st.plotly_chart(fig_edad, use_container_width=True)
 
         st.divider()
-        if st.button("📥 Generar Reporte PDF Oficial para Supervisor"):
-            with st.spinner("Compilando datos..."):
-                pdf_bytes = crear_pdf_aps(resumen)
-                st.download_button(
-                    label="💾 Descargar Archivo PDF",
-                    data=pdf_bytes,
-                    file_name=f"informe_poblacional_{usuario_actual}_{date.today()}.pdf",
-                    mime="application/pdf"
-                )
 
+        # 3. Estadísticas de Programas de Salud (Solo si existen las tablas)
+        st.subheader("🌡️ Indicadores de Programas")
+        
+        metric_cols = st.columns(3)
+        
+        # Conteo TBC
+        if tabla_existe('tbc'):
+            tbc_count = pd.read_sql(f"SELECT count(*) as total FROM tbc {filtro_sql} AND estado='Activo'", conn, params=params)['total'][0]
+            metric_cols[0].metric("TBC Activos", tbc_count)
+        else:
+            metric_cols[0].metric("TBC Activos", "0*")
+
+        # Conteo Embarazadas
+        if tabla_existe('controles_embarazo'):
+            # Usamos COUNT(DISTINCT dni) para no contar dos veces a la misma persona si tiene varios controles
+            emb_count = pd.read_sql(f"SELECT count(DISTINCT dni) as total FROM controles_embarazo {filtro_sql}", conn, params=params)['total'][0]
+            metric_cols[1].metric("Embarazadas", emb_count)
+        else:
+            metric_cols[1].metric("Embarazadas", "0*")
+
+        # Conteo Riesgo Nutricional
+        if tabla_existe('crecimiento'):
+            nut_count = pd.read_sql(f"SELECT count(*) as total FROM crecimiento {filtro_sql} AND imc < 18.5", conn, params=params)['total'][0]
+            metric_cols[2].metric("Riesgo Nutricional", nut_count)
+        else:
+            metric_cols[2].metric("Riesgo Nutricional", "0*")
+
+        st.caption("* Los datos marcados con asterisco indican que el programa aún no tiene registros.")
+
+    except Exception as e:
+        st.error(f"Error técnico en Estadísticas: {e}")
+    finally:
+        conn.close()
     else:
         st.warning(f"No hay registros cargados para la vista de {usuario_actual}.")
 import streamlit as st
@@ -1320,6 +1265,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
