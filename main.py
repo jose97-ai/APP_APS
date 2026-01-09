@@ -2,7 +2,7 @@ def conectar_y_reparar():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # 1. Crear tablas base
+    # 1. Crear tablas base (Nivel 1: 4 espacios)
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
@@ -10,110 +10,28 @@ def conectar_y_reparar():
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
 
-    # 2. Función interna para agregar columnas faltantes
-def agregar_col(tabla, columna, tipo):
-        cursor.execute(f"PRAGMA table_info({tabla})")
-        columnas = [info[1] for info in cursor.fetchall()]
-        if columna not in columnas:
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+    # 2. Función interna (Nivel 1: 4 espacios)
+    def agregar_col(tabla, columna, tipo):
+        cursor.execute(f"PRAGMA table_info({tabla})") # Nivel 2: 8 espacios
+        columnas = [info[1] for info in cursor.fetchall()] # Nivel 2: 8 espacios
+        if columna not in columnas: # Nivel 2: 8 espacios
+            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}") # Nivel 3: 12 espacios
 
-    # 3. Reparar cada tabla con las columnas que pediste
-    # Viviendas
-for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
-        agregar_col("viviendas", c, "TEXT")
+    # 3. Reparar Viviendas (Nivel 1: 4 espacios)
+    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
+        agregar_col("viviendas", c, "TEXT") # Nivel 2: 8 espacios
     
-    # Integrantes
+    # 4. Reparar Integrantes (Línea 26 - Nivel 1: 4 espacios)
     for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
-        agregar_col("integrantes", c, "TEXT")
+        agregar_col("integrantes", c, "TEXT") # Nivel 2: 8 espacios
 
-    # Vacunas
+    # 5. Reparar Vacunas (Nivel 1: 4 espacios)
     for c in ["vacuna", "dosis", "fecha", "lote", "ronda", "registrado_por"]:
-        agregar_col("vacunas", c, "TEXT")
+        agregar_col("vacunas", c, "TEXT") # Nivel 2: 8 espacios
 
     conn.commit()
     return conn
-def conexion_segura():
-    try:
-        # Intentamos conectar con un timeout de 10 segundos para evitar bloqueos
-        conn = sqlite3.connect('aps_oran_final.db', timeout=10)
-        return conn
-    except sqlite3.OperationalError:
-        st.error("⚠️ La base de datos está bloqueada por otro proceso. Intenta refrescar (F5).")
-        return None
-
-def inicializar_todo():
-    conn = conexion_segura()
-    if conn:
-        cursor = conn.cursor()
-        # Creamos las tablas necesarias paso a paso
-        tablas = {
-            "usuarios": "usuario TEXT PRIMARY KEY, password TEXT, rol TEXT",
-            "integrantes": "dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT",
-            "viviendas": "nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT",
-            "vacunas": "dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT",
-            "asignaciones": "supervisor TEXT, agente TEXT",
-            "config": "clave TEXT PRIMARY KEY, valor TEXT"
-        }
-        
-        for nombre, campos in tablas.items():
-            cursor.execute(f"CREATE TABLE IF NOT EXISTS {nombre} ({campos})")
-        
-        # Usuario admin inicial
-        cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin123', 'admin')")
-        
-        conn.commit()
-        conn.close()
-def inicializar_base_de_datos():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Crear todas las tablas necesarias
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, ronda TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
     
-    # Crear usuario admin por defecto si la tabla está vacía
-    res = cursor.execute("SELECT * FROM usuarios WHERE usuario='admin'").fetchone()
-    if not res:
-        cursor.execute("INSERT INTO usuarios VALUES ('admin', 'admin123', 'admin')")
-        
-    conn.commit()
-    conn.close()
-def inicializar_base_de_datos():
-    try:
-        with sqlite3.connect('aps_oran_final.db') as conn:
-            cursor = conn.cursor()
-            # Creamos todas las tablas necesarias con sus columnas correctas
-            cursor.execute("""CREATE TABLE IF NOT EXISTS usuarios 
-                           (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)""")
-            
-            cursor.execute("""CREATE TABLE IF NOT EXISTS integrantes 
-                           (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)""")
-            
-            cursor.execute("""CREATE TABLE IF NOT EXISTS viviendas 
-                           (nro_casa TEXT PRIMARY KEY, prioridad TEXT, fuente_agua TEXT, tenencia TEXT, registrado_por TEXT)""")
-            
-            cursor.execute("""CREATE TABLE IF NOT EXISTS vacunas 
-                           (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, ronda TEXT, registrado_por TEXT)""")
-            
-            cursor.execute("""CREATE TABLE IF NOT EXISTS asignaciones 
-                           (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))""")
-            
-            cursor.execute("""CREATE TABLE IF NOT EXISTS config 
-                           (clave TEXT PRIMARY KEY, valor TEXT)""")
-            
-            # Usuario admin por defecto
-            cursor.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin123', 'admin')")
-            conn.commit()
-    except Exception as e:
-        st.error(f"Error crítico al crear tablas: {e}")
-
-# Ejecutar SIEMPRE al inicio del main()
-def main():
-    inicializar_base_de_datos()
-    # ... resto del código
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -1585,6 +1503,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
