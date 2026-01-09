@@ -1033,19 +1033,20 @@ def bloque_8_supervisor(): bloque_8_analisis()
 def bloque_8_mapas(): bloque_8_analisis()
 def bloque_8_analisis_agente(): bloque_8_analisis()
 # ==========================================
-# BLOQUE 9: ADMINISTRACIÓN Y EQUIPOS
+# BLOQUE 9: ADMINISTRACIÓN COMPLETO
 # ==========================================
 def bloque_9_admin():
     st.title("⚙️ Panel de Administración")
     
     if st.session_state.get('rol_usuario') != "Administrador":
-        st.error("Acceso restringido a Administradores.")
+        st.error("Acceso restringido.")
         return
 
-    # Añadimos la pestaña de "Equipos"
-    tab_crear, tab_equipos, tab_bajas, tab_dev = st.tabs([
+    # Pestañas organizadas
+    tab_crear, tab_equipos, tab_rondas, tab_bajas, tab_dev = st.tabs([
         "👤 Crear Usuario", 
-        "🤝 Asignar Equipos",
+        "🤝 Equipos",
+        "🌀 Rondas",
         "🗑️ Bajas", 
         "🛠️ Mantenimiento"
     ])
@@ -1060,64 +1061,72 @@ def bloque_9_admin():
             n = st.text_input("Nombre Real:")
             r = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"])
             if st.form_submit_button("Guardar"):
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO usuarios (usuario, password, rol, nombre) VALUES (?,?,?,?)", (u,p,r,n))
+                conn.execute("INSERT INTO usuarios (usuario, password, rol, nombre) VALUES (?,?,?,?)", (u,p,r,n))
                 conn.commit()
                 st.success("Usuario creado.")
 
-    # --- PESTAÑA 2: ASIGNAR AGENTES A SUPERVISORES (LO QUE BUSCABAS) ---
+    # --- PESTAÑA 2: ASIGNAR EQUIPOS ---
     with tab_equipos:
         st.subheader("Vincular Agentes con su Supervisor")
-        
-        # Obtener listas
         supervisores = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Supervisor'", conn)['usuario'].tolist()
-        agentes = pd.read_sql("SELECT usuario, supervisor_id FROM usuarios WHERE rol='Agente Sanitario'", conn)
-        
-        if not supervisores:
-            st.warning("No hay supervisores registrados aún.")
-        else:
+        if supervisores:
             col_sup, col_age = st.columns(2)
             with col_sup:
-                sup_sel = st.selectbox("1. Seleccione Supervisor:", supervisores)
+                sup_sel = st.selectbox("Seleccione Supervisor:", supervisores)
             with col_age:
-                # Mostrar solo agentes que NO tienen ese supervisor o no tienen ninguno
-                agentes_disp = agentes[agentes['supervisor_id'] != sup_sel]['usuario'].tolist()
-                age_sel = st.multiselect("2. Seleccione Agente(s) para este equipo:", agentes_disp)
+                agentes_disp = pd.read_sql("SELECT usuario FROM usuarios WHERE rol='Agente Sanitario' AND (supervisor_id != ? OR supervisor_id IS NULL)", conn, params=(sup_sel,))['usuario'].tolist()
+                age_sel = st.multiselect("Seleccione Agente(s):", agentes_disp)
+            
+            if st.button("Confirmar Equipo"):
+                for a in age_sel:
+                    conn.execute("UPDATE usuarios SET supervisor_id = ? WHERE usuario = ?", (sup_sel, a))
+                conn.commit()
+                st.success("Equipo actualizado.")
+        st.write("**Mapa de Equipos:**")
+        st.dataframe(pd.read_sql("SELECT nombre, supervisor_id FROM usuarios WHERE rol='Agente Sanitario'", conn))
 
-            if st.button("Confirmar Asignación de Equipo"):
-                if age_sel:
-                    cursor = conn.cursor()
-                    for a in age_sel:
-                        cursor.execute("UPDATE usuarios SET supervisor_id = ? WHERE usuario = ?", (sup_sel, a))
-                    conn.commit()
-                    st.success(f"Se asignaron {len(age_sel)} agentes a {sup_sel}")
-                    st.rerun()
+    # --- PESTAÑA 3: GESTIÓN DE RONDAS (NUEVO) ---
+    with tab_rondas:
+        st.subheader("Configuración de Ronda Activa")
+        st.info("La ronda seleccionada aquí será la que se asigne automáticamente a cada nuevo control de salud (Embarazo, TBC, Nutrición).")
+        
+        # Intentar leer la ronda actual de una tabla de configuración
+        conn.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+        res = conn.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        ronda_actual = res[0] if res else "1"
+        
+        st.write(f"### Ronda configurada actualmente: **{ronda_actual}**")
+        
+        nueva_ronda = st.select_slider(
+            "Cambiar a Ronda:",
+            options=["1", "2", "3", "4"],
+            value=ronda_actual
+        )
+        
+        if st.button("Actualizar Ronda para todo el Sistema"):
+            conn.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (nueva_ronda,))
+            conn.commit()
+            st.success(f"¡Sistema actualizado! Ahora todos los registros se guardarán como Ronda {nueva_ronda}.")
+            st.rerun()
 
-        st.divider()
-        st.write("**Mapa de Equipos Actual:**")
-        df_mapa = pd.read_sql("SELECT nombre as Agente, supervisor_id as Supervisor FROM usuarios WHERE rol='Agente Sanitario'", conn)
-        st.table(df_mapa)
-
-    # --- PESTAÑA 3: BAJAS ---
+    # --- PESTAÑA 4: BAJAS ---
     with tab_bajas:
         df_all = pd.read_sql("SELECT usuario, rol, nombre FROM usuarios", conn)
         user_del = st.selectbox("Usuario a eliminar:", [""] + df_all['usuario'].tolist())
-        if st.button("Eliminar permanentemente", type="primary") and user_del:
+        if st.button("Eliminar", type="primary") and user_del:
             if user_del != st.session_state.get('usuario_logueado'):
                 conn.execute("DELETE FROM usuarios WHERE usuario = ?", (user_del,))
                 conn.commit()
-                st.success("Eliminado.")
                 st.rerun()
 
-    # --- PESTAÑA 4: MODO DESARROLLADOR ---
+    # --- PESTAÑA 5: MANTENIMIENTO ---
     with tab_dev:
-        st.subheader("Limpieza de Pruebas")
-        dni_p = st.text_input("DNI de prueba:")
+        dni_p = st.text_input("DNI de prueba a limpiar:")
         if st.button("Borrar DNI de todo el sistema"):
             for t in ['integrantes', 'controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
                 conn.execute(f"DELETE FROM {t} WHERE dni = ?", (dni_p,))
             conn.commit()
-            st.success("Datos de prueba borrados.")
+            st.success("Limpieza completada.")
 
     conn.close()
 # ==========================================
@@ -1233,6 +1242,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
