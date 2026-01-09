@@ -248,6 +248,10 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
+    st.write("### LA FUNCIÓN MAIN ESTÁ CARGANDO") # <--- Agrega esto
+    st.sidebar.header("ESTO DEBE APARECER A LA IZQUIERDA") # <--- Y esto
+    
+    opciones = [ ... ]
     st.title("🏠 Panel de Control APS - Orán")
     
     conn = sqlite3.connect('aps_oran_final.db')
@@ -1696,6 +1700,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
