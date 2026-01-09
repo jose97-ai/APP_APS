@@ -24,7 +24,57 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+# --- FUNCIONES DE BASE DE DATOS INTEGRADAS ---
+def obtener_conexion():
+    """Crea la conexión a la base de datos local"""
+    return sqlite3.connect('aps_oran_final.db')
 
+def inicializar_db():
+    """Crea todas las tablas si no existen al iniciar la app"""
+    conn = obtener_conexion()
+    c = conn.cursor()
+    # Tabla de Integrantes
+    c.execute('''CREATE TABLE IF NOT EXISTS integrantes (
+        dni TEXT PRIMARY KEY, nro_aps TEXT, familia TEXT, nombre TEXT, f_nac TEXT, sexo TEXT,
+        nivel_ed TEXT, estado_ed TEXT, latitud REAL, longitud REAL, obra_social TEXT, 
+        fecha_registro TEXT, registrado_por TEXT, tenencia TEXT, agua TEXT, excretas TEXT, 
+        basura TEXT, cocina TEXT, produccion TEXT, techo TEXT, piso TEXT, paredes TEXT)''')
+    # Tabla de Usuarios
+    c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
+        usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)''')
+    # Tabla de Vacunas
+    c.execute('''CREATE TABLE IF NOT EXISTS vacunas (
+        dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, registrado_por TEXT)''')
+    # Tabla de TBC
+    c.execute('''CREATE TABLE IF NOT EXISTS tbc (
+        dni TEXT, tipo TEXT, fase TEXT, toma INTEGER, fecha_muestra TEXT, estado TEXT, registrado_por TEXT)''')
+    # Tabla Materno
+    c.execute('''CREATE TABLE IF NOT EXISTS controles_embarazo (
+        dni TEXT, fum TEXT, fpp TEXT, fde TEXT, m_1ro TEXT, m_2do TEXT, m_3ro TEXT, 
+        parto_fecha TEXT, parto_lugar TEXT, aborto TEXT, registrado_por TEXT)''')
+    # Tabla Nutrición
+    c.execute('''CREATE TABLE IF NOT EXISTS crecimiento (
+        dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT)''')
+    
+    # Usuario admin por defecto (Pass: oran2026)
+    c.execute("INSERT OR IGNORE INTO usuarios VALUES (?,?,?,?)", 
+             ('admin', 'Admin Orán', 'Administrador', hashlib.sha256(str.encode('oran2026')).hexdigest()))
+    conn.commit()
+    conn.close()
+
+def hash_password(password):
+    """Encripta las contraseñas"""
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def chequear_vacunas_faltantes(dni):
+    """Lógica de alertas de vacunas"""
+    vacunas_obligatorias = ["BCG", "Hepatitis B", "Quintuple", "Fiebre Amarilla"]
+    conn = obtener_conexion()
+    try:
+        aplicadas = pd.read_sql("SELECT vacuna FROM vacunas WHERE dni=?", conn, params=(dni,))['vacuna'].tolist()
+    except: aplicadas = []
+    finally: conn.close()
+    return [v for v in vacunas_obligatorias if v not in aplicadas]
 # Al inicio de la función main, llamas a la inicialización
 def main():
     inicializar_db() # Esto asegura que las tablas existan antes de que el usuario haga login
@@ -980,6 +1030,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
