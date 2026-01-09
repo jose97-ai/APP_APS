@@ -1,4 +1,4 @@
-import streamlit as st
+iimport streamlit as st
 import pandas as pd
 import sqlite3
 import hashlib
@@ -71,6 +71,87 @@ def bloque_0_inicio():
             else: st.success("✅ Vacunación al día.")
     finally:
         conn.close()
+
+# --- 4. CONTROL DE NAVEGACIÓN (MAIN) ---
+def conectar_y_reparar():
+    return sqlite3.connect('aps_oran_final.db')
+def main():
+    inicializar_db()  # Asegura que las tablas y las alertas del 07/01 existan
+    
+    st.sidebar.title("🏥 APS Orán 2026")
+    
+    opciones = [
+        "🏠 Dashboard", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
+        "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
+        "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
+        "🚨 11. Vigilancia Epidemiológica"
+    ]
+    
+    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
+
+    # --- CONEXIÓN DE LOS BLOQUES ---
+    if seleccion == "🏠 Inicio":
+        bloque_0_inicio() # Muestra alertas de niños y claves
+
+    elif seleccion == "📝 1. Censo":
+        if 'bloque_1_censo' in globals(): bloque_1_censo()
+        elif 'censo' in globals(): censo()
+        else: st.error("No se encontró la función de Censo")
+
+    elif seleccion == "🤰 2. Embarazadas":
+        if 'bloque_2_materno' in globals(): bloque_2_materno()
+        elif 'embarazadas' in globals(): embarazadas()
+        else: st.error("No se encontró la función de Embarazadas")
+
+    elif seleccion == "🏠 3. Viviendas":
+        # Intentamos varios nombres para que aparezca tu contenido
+        if 'bloque_3_viviendas' in globals(): bloque_3_viviendas()
+        elif 'viviendas' in globals(): viviendas()
+        elif 'formulario_viviendas' in globals(): formulario_viviendas()
+        else: st.warning("Sección Viviendas: No encontré la función. Revisa cómo la nombraste (ej: def viviendas():)")
+
+    elif seleccion == "💉 4. Vacunación":
+        if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
+        elif 'vacunacion' in globals(): vacunacion()
+
+    elif seleccion == "🍎 5. Nutrición":
+        if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
+        elif 'nutricion' in globals(): nutricion()
+        elif 'bloque_5_nutricion' in globals(): bloque_5_nutricion()
+        else: st.warning("Sección Nutrición: Revisa el nombre de la función.")
+
+    elif seleccion == "🦠 6. TBC":
+        if 'bloque_5_tbc' in globals(): bloque_5_tbc()
+        elif 'bloque_6_tbc' in globals(): bloque_6_tbc()
+        elif 'tbc' in globals(): tbc()
+        else: st.warning("Sección TBC: Revisa el nombre de la función.")
+
+    elif seleccion == "📊 7. Estadísticas":
+        if 'bloque_10_stats' in globals(): bloque_10_stats()
+        elif 'bloque_7_stats' in globals(): bloque_7_stats()
+        elif 'estadisticas' in globals(): estadisticas()
+
+    elif seleccion == "👥 8. Seguimiento Agentes":
+        if 'bloque_8_seguimiento' in globals(): bloque_8_seguimiento()
+        elif 'seguimiento' in globals(): seguimiento()
+
+    elif seleccion == "⚙️ 9. Admin":
+        bloque_9_admin()
+
+    elif seleccion == "🚀 10. Gestión Avanzada":
+        if 'bloque_10_gestion_avanzada' in globals():
+            bloque_10_gestion_avanzada()
+        else:
+            st.error("Error de conexión: Verifica que 'def bloque_10_gestion_avanzada():' esté bien escrito arriba.")
+
+    elif seleccion == "🚨 11. Vigilancia Epidemiológica":
+        if 'bloque_11_vigilancia_epidemiologica' in globals():
+            bloque_11_vigilancia_epidemiologica()
+        else:
+            st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
+
+if __name__ == "__main__":
+    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1513,8 +1594,8 @@ def main():
         else:
             st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
 
-if __name__ == "__main__":
-    main()
+
+
 
 
 
