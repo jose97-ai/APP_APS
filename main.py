@@ -234,7 +234,7 @@ def bloque_0_dashboard():
             st.info("Sin datos de vacunas aún.")
 
     conn.close()
-    def inicializar_tablas_sistema():
+def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
@@ -1469,6 +1469,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
