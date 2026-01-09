@@ -1235,7 +1235,7 @@ def main():
         elif "4. Vacunas" in menu: bloque_4_vacunas()
         elif "5. Nutrición" in menu: bloque_5_nutricion()
         elif "6. TBC" in menu: bloque_6_tbc()
-        elif "7. Estadísticas" in menu: bloque_7_estadistica()
+        elif "7. Estadísticas" in menu: bloque_7_estadisticas()
         elif "8. Mapas" in menu:
             if st.session_state["rol_usuario"] in ["Supervisor", "Administrador"]:
                 bloque_8_supervisor()
@@ -1245,6 +1245,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
