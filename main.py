@@ -1771,7 +1771,7 @@ def main():
 
         st.sidebar.divider()
         
-      opciones = [
+    opciones = [
             "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
             "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
             "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
@@ -1805,6 +1805,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
