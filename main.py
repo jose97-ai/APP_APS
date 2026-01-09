@@ -1489,8 +1489,8 @@ def main():
     seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
 
     # --- CONEXIÓN DE LOS BLOQUES ---
-    if seleccion == "🏠 Dashboard":
-        bloque_0_dashboard() # Muestra alertas de niños y claves
+    if seleccion == "🏠 Inicio":
+        bloque_0_inicio() # Muestra alertas de niños y claves
 
     elif seleccion == "📝 1. Censo":
         if 'bloque_1_censo' in globals(): bloque_1_censo()
@@ -1552,21 +1552,3 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
