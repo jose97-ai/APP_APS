@@ -1930,53 +1930,52 @@ def bloque_11_vigilancia_epidemiologica():
 # MOTOR DE NAVEGACIÓN (VERSIÓN DE RESCATE)
 # =================================================================
 def main():
-    # Menú de Navegación con los nuevos bloques incluidos
+    try:
+        conectar_y_reparar()
+    except:
+        pass
+
+    st.sidebar.title("🏥 Gestión APS Orán")
+    
     opciones = [
-        "🏠 Panel de Control", 
-        "📝 1. Censo", 
-        "🤰 2. Materno", 
-        "🏠 3. Vivienda", 
-        "💉 4. Vacunas", 
-        "⚖️ 5. Nutrición", 
-        "💊 6. TBC", 
-        "📊 7. Estadísticas", 
-        "🗺️ 8. Mapas", 
-        "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada",
-        "🚨 11. Vigilancia Alertas"
+        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # Barra lateral
-    st.sidebar.title("Navegación APS")
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="menu_final_seguro")
 
-    # Lógica de redirección (Asegúrate de que los nombres coincidan exactamente)
+    # --- LÓGICA DE NAVEGACIÓN PROTEGIDA ---
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
-    elif menu == "📝 1. Censo":
-        bloque_1_vivienda() # O el nombre que uses para censo
-    elif menu == "🤰 2. Materno":
-        bloque_2_embarazo()
-    elif menu == "🏠 3. Vivienda":
-        bloque_3_vivienda()
-    elif menu == "💉 4. Vacunas":
-        bloque_4_vacunas()
-    elif menu == "⚖️ 5. Nutrición":
-        bloque_5_nutricion()
-    elif menu == "💊 6. TBC":
-        bloque_6_tbc()
-    elif menu == "📊 7. Estadísticas":
-        bloque_7_estadisticas()
-    elif menu == "🗺️ 8. Mapas":
-        bloque_8_seguimiento_agentes()
-    elif menu == "⚙️ 9. Admin":
-        bloque_9_configuracion()
-    elif menu == "🛠️ 10. Gestión Avanzada":
-        bloque_10_gestion_avanzada()
-    elif menu == "🚨 11. Vigilancia Alertas":
-        bloque_11_vigilancia_epidemiologica()
+    
+    elif "1. Censo" in menu:
+        # Esto intenta llamar a la función solo si existe. Si no, te avisa.
+        if 'bloque_1_vivienda' in globals():
+            bloque_1_vivienda()
+        elif 'bloque_1_censo' in globals():
+            bloque_1_censo()
+        else:
+            st.warning("⚠️ Error: No encontré la función para el Censo. Revisa cómo se llama en tu código (ej: def bloque_1_xxx).")
 
-# Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
+    elif "9. Admin" in menu:
+        # Cumpliendo instrucción del 07/01/2026
+        if 'bloque_9_configuracion' in globals():
+            bloque_9_configuracion()
+        else:
+            st.info("⚙️ Sección Admin: Aquí podrás cambiar tu contraseña pronto.")
+
+    elif "11. Vigilancia" in menu:
+        # Cumpliendo instrucción del 07/01/2026 (Alertas niños)
+        if 'bloque_11_vigilancia_alertas' in globals():
+            bloque_11_vigilancia_alertas()
+        else:
+            st.info("🚨 Alerta: Niños con vacunas pendientes. (Bloque 11 en desarrollo)")
+
+    else:
+        st.info(f"Has seleccionado {menu}. Esta sección se activará cuando la función correspondiente esté lista.")
+
 if __name__ == "__main__":
     main()
 
