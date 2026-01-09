@@ -1514,6 +1514,181 @@ def bloque_9_admin():
 
     conn.close()
 # ==========================================
+# BLOQUE 10: ADMINISTRACION DE DATOS
+# ==========================================
+import streamlit as st
+import pandas as pd
+import sqlite3
+from datetime import datetime
+
+def bloque_10_gestion_avanzada():
+    st.title("🛠️ Panel de Control y Gestión Avanzada")
+    st.markdown("---")
+
+    try:
+        conn = sqlite3.connect('aps_oran_final.db')
+        
+        # --- SECCIÓN 1: METAS Y PROGRESO ---
+        st.subheader("🎯 Cumplimiento de Metas Mensuales")
+        
+        # Definimos una meta (puedes cambiar este número o hacerlo configurable)
+        META_CENSO = 500  # Ejemplo: Meta de 500 personas por mes
+        
+        df_total = pd.read_sql("SELECT COUNT(dni) as total FROM integrantes", conn)
+        total_censados = df_total['total'][0]
+        
+        progreso = min(total_censados / META_CENSO, 1.0)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.progress(progreso)
+        with col2:
+            st.write(f"**{int(progreso*100)}%** ({total_censados}/{META_CENSO})")
+        
+        st.divider()
+
+        # --- SECCIÓN 2: PESTAÑAS DE TRABAJO ---
+        tab_prod, tab_calidad, tab_archivos = st.tabs([
+            "📈 Productividad", "🧼 Limpieza de Datos", "📂 Exportación Masiva"
+        ])
+
+        with tab_prod:
+            st.subheader("Rendimiento por Agente")
+            query_prod = """
+                SELECT registrado_por as Agente, COUNT(dni) as 'Personas Censadas',
+                       COUNT(DISTINCT nro_casa) as 'Viviendas Visitadas'
+                FROM integrantes 
+                GROUP BY registrado_por 
+                ORDER BY COUNT(dni) DESC
+            """
+            df_prod = pd.read_sql(query_prod, conn)
+            st.table(df_prod)
+            st.info("💡 Este reporte ayuda a los supervisores a balancear las cargas de trabajo entre los agentes.")
+
+        with tab_calidad:
+            st.subheader("Control de Integridad")
+            df_int = pd.read_sql("SELECT dni, nombre, registrado_por FROM integrantes", conn)
+            
+            # Buscador de duplicados
+            duplicados = df_int[df_int.duplicated('dni', keep=False)]
+            
+            if not duplicados.empty:
+                st.error(f"⚠️ Atención: Se detectaron {len(duplicados)} registros con DNI duplicado.")
+                st.dataframe(duplicados, use_container_width=True)
+                
+                if st.button("🚀 Ejecutar limpieza automática"):
+                    cursor = conn.cursor()
+                    # Borra los duplicados manteniendo solo el registro más antiguo (min rowid)
+                    cursor.execute("""
+                        DELETE FROM integrantes 
+                        WHERE rowid NOT IN (
+                            SELECT MIN(rowid) FROM integrantes GROUP BY dni
+                        )
+                    """)
+                    conn.commit()
+                    st.success("¡Base de datos depurada con éxito!")
+                    st.rerun()
+            else:
+                st.success("✅ Calidad de datos óptima: No hay DNI duplicados.")
+
+        with tab_archivos:
+            st.subheader("Exportar Datos para Informes Oficiales")
+            st.write("Seleccione la tabla que desea descargar en formato Excel/CSV:")
+            
+            tablas = {
+                "Censo Completo": "integrantes",
+                "Fichas de Vivienda": "viviendas",
+                "Control de Vacunas": "vacunas",
+                "Seguimiento TBC": "tbc",
+                "Embarazadas": "controles_embarazo"
+            }
+            
+            for nombre, tabla_db in tablas.items():
+                try:
+                    df_exp = pd.read_sql(f"SELECT * FROM {tabla_db}", conn)
+                    if not df_exp.empty:
+                        csv = df_exp.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label=f"📥 Descargar {nombre}",
+                            data=csv,
+                            file_name=f"APS_Oran_{tabla_db}_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv",
+                            key=f"btn_{tabla_db}"
+                        )
+                except:
+                    st.caption(f"La tabla {nombre} aún no tiene datos.")
+
+        conn.close()
+
+    except Exception as e:
+        st.error(f"Error en el Bloque 10: {e}")
+# ==========================================
+# BLOQUE 10: ADMINISTRACION DE ALERTAS
+# ==========================================
+def bloque_11_vigilancia_epidemiologica():
+    st.title("🚨 Vigilancia Epidemiológica y Alertas")
+    st.markdown("---")
+
+    try:
+        conn = conectar_y_reparar()
+        
+        # 1. Traemos los datos necesarios para cruzar información
+        df_per = pd.read_sql("SELECT dni, nombre, f_nac, sexo, registrado_por FROM integrantes", conn)
+        df_vac = pd.read_sql("SELECT * FROM vacunas", conn)
+        df_nut = pd.read_sql("SELECT * FROM crecimiento", conn)
+        df_emb = pd.read_sql("SELECT * FROM controles_embarazo", conn)
+
+        # Función para calcular meses (vital para vacunación)
+        def calcular_meses(f):
+            try:
+                nac = datetime.strptime(f, '%Y-%m-%d')
+                hoy = datetime.now()
+                return (hoy.year - nac.year) * 12 + hoy.month - nac.month
+            except: return 0
+
+        df_per['meses'] = df_per['f_nac'].apply(calcular_meses)
+
+        # --- PESTAÑAS DE VIGILANCIA ---
+        tab_vax, tab_nut, tab_emb = st.tabs(["💉 Vacunas en Mora", "🍏 Riesgo Nutricional", "🤰 Control Materno"])
+
+        with tab_vax:
+            st.subheader("Niños con Esquema Incompleto")
+            # Ejemplo: Niños de 2 meses que deberían tener la Sabin/Quíntuple
+            dnis_con_vacunas = df_vac['dni'].unique()
+            ninos_riesgo = df_per[(df_per['meses'] >= 2) & (~df_per['dni'].isin(dnis_con_vacunas))]
+            
+            if not ninos_riesgo.empty:
+                st.error(f"Se detectaron {len(ninos_riesgo)} niños mayores de 2 meses sin registros de vacunas.")
+                st.dataframe(ninos_riesgo[['dni', 'nombre', 'meses', 'registrado_por']])
+            else:
+                st.success("No hay niños en mora de vacunación detectados.")
+
+        with tab_nut:
+            st.subheader("Alertas de Crecimiento (IMC)")
+            if not df_nut.empty:
+                # Unimos con integrantes para saber el nombre
+                df_alerta_nut = pd.merge(df_nut, df_per[['dni', 'nombre']], on='dni')
+                riesgo_bajo = df_alerta_nut[df_alerta_nut['imc'] < 18.5]
+                
+                if not riesgo_bajo.empty:
+                    st.warning("Casos con Bajo Peso detectados:")
+                    st.dataframe(riesgo_bajo[['dni', 'nombre', 'imc', 'ronda']])
+            else:
+                st.info("No hay datos de crecimiento cargados aún.")
+
+        with tab_emb:
+            st.subheader("Prioridad de Visita Domiciliaria")
+            if not df_emb.empty:
+                df_riesgo_emb = pd.merge(df_emb, df_per[['dni', 'nombre']], on='dni')
+                # Aquí podrías filtrar por 'semanas_gestacion' si tienes esa columna
+                st.dataframe(df_riesgo_emb[['dni', 'nombre', 'ronda']])
+            else:
+                st.info("No hay registros de embarazo actuales.")
+
+        conn.close()
+    except Exception as e:
+        st.error(f"Error en Bloque 11: {e}")
+# ==========================================
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
 def main():
@@ -1623,9 +1798,13 @@ def main():
             else:
                 bloque_8_analisis_agente()
         elif "9. Admin" in menu: bloque_9_admin()
+        elif menu == "10. Gestión Avanzada": bloque_10_gestion_avanzada()
+        elif menu == "11. Gestión Alertas Epi": bloque_11_gestion_alertas_epi()
+
 
 if __name__ == "__main__":
     main()
+
 
 
 
