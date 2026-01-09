@@ -444,93 +444,85 @@ def bloque_2_materno():
         finally:
             conn.close()
 # ==========================================
-# BLOQUE 3: VIVIENDA, VISITAS Y PRIORIDAD
+# BLOQUE 3: VIVIENDA (CÓDIGO COMPLETO)
 # ==========================================
 def bloque_3_vivienda():
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    ronda_actual, _ = obtener_ronda_info()
+    st.header("🏠 Relevamiento de Condiciones de Vivienda")
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
 
-    st.header(f"🏠 Bloque 3: Gestión de Vivienda (Ronda {ronda_actual})")
-    
-    # BUSCADOR POR NÚMERO DE VIVIENDA
-    naps_v = st.text_input("🔍 Buscar por N° de APS / Casa", help="Ingrese el número de casa para ver historial y editar")
-    
-    if naps_v:
-        conn = obtener_conexion()
-        # Verificamos existencia y prioridad actual
-        vivienda_data = pd.read_sql_query(
-            "SELECT familia, prioridad, registrado_por FROM integrantes WHERE nro_aps = ? LIMIT 1", 
-            conn, params=(naps_v,)
+    # 1. CREACIÓN DE TABLA VIVIENDA (Si no existe)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS viviendas (
+            nro_casa TEXT PRIMARY KEY,
+            tipo_techo TEXT,
+            tipo_piso TEXT,
+            agua_red TEXT,
+            baño_tipo TEXT,
+            gas_tipo TEXT,
+            registrado_por TEXT,
+            fecha_relevamiento TEXT
         )
-        
-        if not vivienda_data.empty:
-            familia_nombre = vivienda_data['familia'][0]
-            prioridad_actual = vivienda_data['prioridad'][0]
+    """)
+    conn.commit()
+
+    # 2. SELECCIÓN DE CASA
+    nro_casa_v = st.text_input("Ingrese Número de Casa / APS para evaluar:", 
+                                help="Debe coincidir con el número usado en el Censo")
+
+    if nro_casa_v:
+        # Verificamos si la casa existe en el censo (Bloque 1)
+        query_check = "SELECT nombre FROM integrantes WHERE nro_casa = ? LIMIT 1"
+        res = cursor.execute(query_check, (nro_casa_v,)).fetchone()
+
+        if res:
+            st.success(f"✅ Casa localizada. Familia de: {res[0]}")
             
-            # MOSTRAR CABECERA DE LA CASA
-            st.subheader(f"Casa N° {naps_v} - Familia {familia_nombre}")
-            
-            # --- SECCIÓN A: MARCADO DE VISITA Y PRIORIDAD ---
-            col_v1, col_v2 = st.columns(2)
-            
-            with col_v1:
-                st.write("📌 **Estado y Seguimiento**")
-                nueva_prioridad = st.selectbox("Nivel de Prioridad", ["Normal", "Media", "ALTA PRIORIDAD"], 
-                                               index=["Normal", "Media", "ALTA PRIORIDAD"].index(prioridad_actual))
+            # Buscamos si ya tiene datos cargados previamente
+            cursor.execute("SELECT * FROM viviendas WHERE nro_casa = ?", (nro_casa_v,))
+            datos_previos = cursor.fetchone()
+
+            # 3. FORMULARIO DE CONDICIONES
+            with st.form("form_vivienda_detalle"):
+                st.subheader("🛠️ Detalles de Infraestructura")
+                col1, col2 = st.columns(2)
                 
-                if st.button("🚩 Actualizar Prioridad"):
-                    conn.execute("UPDATE integrantes SET prioridad = ? WHERE nro_aps = ?", (nueva_prioridad, naps_v))
-                    conn.commit()
-                    st.success("Prioridad actualizada")
+                with col1:
+                    techo = st.selectbox("Material del Techo:", 
+                                       ["Chapa", "Losa/Material", "Madera", "Paja/Barro", "Fibrocemento"])
+                    piso = st.selectbox("Material del Piso:", 
+                                      ["Cemento", "Mosaico/Cerámico", "Tierra", "Ladrillo"])
+                    agua = st.radio("¿Tiene Agua de Red?", ["Sí", "No"], horizontal=True)
 
-            with col_v2:
-                st.write("📅 **Registrar Nueva Visita**")
-                if st.button("✅ Marcar Visita Realizada Hoy"):
-                    fecha_hoy = datetime.now().strftime("%d/%m/%Y %H:%M")
-                    conn.execute("INSERT INTO visitas (nro_aps, fecha_visita, agente, ronda) VALUES (?,?,?,?)",
-                                 (naps_v, fecha_hoy, usuario_actual, ronda_actual))
-                    conn.commit()
-                    st.success(f"Visita registrada: {fecha_hoy}")
+                with col2:
+                    baño = st.selectbox("Tipo de Baño:", 
+                                       ["Interior con descarga", "Letrina", "Pozo ciego", "Cámara Séptica"])
+                    gas = st.selectbox("Tipo de Combustible:", 
+                                      ["Gas de Red", "Garrafa", "Leña/Carbón"])
 
-            # --- SECCIÓN B: HISTORIAL DE VISITAS ---
-            with st.expander("📜 Ver Historial de Visitas de esta casa"):
-                historial = pd.read_sql_query("SELECT fecha_visita, agente, ronda FROM visitas WHERE nro_aps = ? ORDER BY rowid DESC", 
-                                              conn, params=(naps_v,))
-                if not historial.empty:
-                    st.table(historial)
-                else:
-                    st.info("No hay visitas registradas anteriormente.")
-
-            st.divider()
-
-            # --- SECCIÓN C: FORMULARIO DE CONDICIONES (Solo editable por el dueño o Admin) ---
-            if usuario_actual == vivienda_data['registrado_por'][0] or st.session_state.get('rol_usuario') == "Administrador":
-                with st.form("form_vivienda_detallado"):
-                    st.subheader("🏗️ Condiciones Habitacionales")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        tenencia = st.selectbox("Tenencia", ["Propia", "Alquilada", "Heredada", "Estado", "Ocupación"])
-                        agua = st.selectbox("Agua", ["Red", "Bomba", "Tachos", "Pozo"])
-                        baño = st.selectbox("Baño", ["Cloaca", "Pozo Ciego", "Letrina", "Sin Baño"])
-                    with col2:
-                        piso = st.selectbox("Piso", ["Cerámico", "Cemento", "Tierra", "Madera"])
-                        techo = st.selectbox("Techo", ["Loza", "Chapa", "Barro/Madera", "Paja"])
-                        pared = st.selectbox("Paredes", ["Ladrillo", "Adobe", "Madera", "Plástico"])
+                if st.form_submit_button("Guardar Datos de Vivienda"):
+                    usuario = st.session_state.get('usuario_logueado', 'admin')
+                    hoy = datetime.now().strftime("%d/%m/%Y %H:%M")
                     
-                    if st.form_submit_button("💾 Guardar Cambios Estructurales"):
-                        conn.execute("""UPDATE integrantes SET 
-                            tenencia=?, agua=?, excretas=?, techo=?, piso=?, paredes=?
-                            WHERE nro_aps=?""",
-                            (tenencia, agua, baño, techo, piso, pared, naps_v))
+                    try:
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO viviendas 
+                            (nro_casa, tipo_techo, tipo_piso, agua_red, baño_tipo, gas_tipo, registrado_por, fecha_relevamiento)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (nro_casa_v, techo, piso, agua, baño, gas, usuario, hoy))
                         conn.commit()
-                        st.success("Condiciones de vivienda actualizadas.")
-            else:
-                st.warning("Solo el agente que censó esta casa puede editar sus materiales.")
+                        st.success(f"📌 Datos de la Casa {nro_casa_v} actualizados correctamente.")
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
+            
+            # 4. VISTA DE RESUMEN
+            if datos_previos:
+                st.info(f"Última actualización de esta vivienda: {datos_previos[7]} por {datos_previos[6]}")
+        
         else:
-            st.error("Casa no encontrada. Verifique el número de APS.")
-        conn.close()
-    else:
-        st.info("Use el buscador superior para gestionar una vivienda.")
+            st.warning(f"⚠️ La casa N° {nro_casa_v} no existe en el Censo. Primero debe registrar a los integrantes en el Bloque 1.")
+
+    conn.close()
 # ==========================================
 # BLOQUE 4: VACUNAS (CON ALERTAS Y JERARQUÍA)
 # ==========================================
@@ -1274,6 +1266,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
