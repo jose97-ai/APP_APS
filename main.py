@@ -1680,6 +1680,36 @@ def main():
 # Asegúrate de que no haya espacios antes de 'if' ni antes de 'main()'
 if __name__ == "__main__":
     main()
+# --- FINAL ABSOLUTO DEL ARCHIVO ---
+
+def main():
+    # 1. Forzamos la barra lateral
+    st.sidebar.title("📌 Menú APS Orán")
+    
+    opciones = [
+        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+    ]
+
+    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
+
+    # 2. Lógica de salto
+    if menu == "🏠 Panel de Control":
+        bloque_0_dashboard()
+    elif menu == "🛠️ 10. Gestión Avanzada":
+        bloque_10_gestion_avanzada()
+    elif menu == "🚨 11. Vigilancia Alertas":
+        bloque_11_vigilancia_epidemiologica()
+    # Si quieres que los otros funcionen, asegúrate de que sus nombres coincidan:
+    elif "1. Censo" in menu:
+        bloque_1_vivienda() 
+
+# ESTO ES LO QUE DEBES REVISAR: 
+# No debe haber NINGÚN espacio antes de 'if' ni antes de 'main()'
+if __name__ == "__main__":
+    main()
 
 
 
