@@ -1,3 +1,30 @@
+def limpieza_total_interfaz():
+    style = """
+        <style>
+        /* Oculta el menú de hamburguesa (tres líneas) */
+        #MainMenu {visibility: hidden;}
+        
+        /* Oculta la barra superior (donde está GitHub y Deploy) */
+        header {visibility: hidden;}
+        
+        /* Oculta el pie de página */
+        footer {visibility: hidden;}
+
+        /* Desactiva la interacción con elementos que activan atajos */
+        .stApp [data-testid="stToolbar"] {display: none;}
+        .stApp [data-testid="stDecoration"] {display: none;}
+        
+        /* Bloquea el margen superior para que no se vea el espacio del header */
+        .block-container {
+            padding-top: 0rem;
+            padding-bottom: 0rem;
+        }
+        </style>
+    """
+    st.markdown(style, unsafe_allow_html=True)
+
+# Ejecútalo al principio de tu main()
+limpieza_total_interfaz()
 import streamlit as st
 
 def ocultar_menu_github():
@@ -1595,6 +1622,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
