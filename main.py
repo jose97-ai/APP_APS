@@ -1,3 +1,11 @@
+import streamlit as st  # <-- ESTO DEBE IR PRIMERO
+import sqlite3
+import pandas as pd
+from datetime import date, datetime, timedelta
+
+# RECIÉN AQUÍ puedes usar st.session_state
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
 # --- SISTEMA DE SEGURIDAD (Copia debajo de los imports) ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
@@ -1560,6 +1568,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
