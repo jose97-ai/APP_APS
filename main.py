@@ -102,30 +102,6 @@ def inicializar_db():
         dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT)''')
     
     # Usuario admin por defecto (Pass: oran2026)
-   # --- CORRECCIÓN PARA LA TABLA DE USUARIOS ---
-    try:
-        # Intentamos ver si la columna 'rol' existe
-        cursor.execute("SELECT rol FROM usuarios LIMIT 1")
-    except sqlite3.OperationalError:
-        # Si da error, la tabla es vieja o incompatible: la borramos
-        cursor.execute("DROP TABLE IF EXISTS usuarios")
-
-    # La creamos con la estructura exacta de 4 columnas
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            usuario TEXT PRIMARY KEY, 
-            nombre TEXT, 
-            rol TEXT, 
-            password TEXT
-        )
-    """)
-
-    # Insertamos el admin especificando las columnas para que no falle nunca
-    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
-    cursor.execute("""
-        INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) 
-        VALUES (?, ?, ?, ?)
-    """, ('admin', 'Admin Orán', 'Administrador', admin_pass))
     c.execute("INSERT OR IGNORE INTO usuarios VALUES (?,?,?,?)", 
              ('admin', 'Admin Orán', 'Administrador', hashlib.sha256(str.encode('oran2026')).hexdigest()))
     conn.commit()
@@ -1754,6 +1730,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
