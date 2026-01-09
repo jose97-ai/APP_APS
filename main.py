@@ -1,11 +1,15 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import hashlib  
-import plotly.express as px
+import hashlib
 from datetime import datetime, date, timedelta
 
-# --- 1. MOTOR DE REPARACIÓN Y CONEXIÓN ---
+# --- 1. CONFIGURACIÓN ÚNICA (Solo una vez al inicio) ---
+if 'config_lista' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
+    st.session_state.config_lista = True
+
+# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN (Tu código original corregido) ---
 def conectar_y_reparar():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -18,7 +22,7 @@ def conectar_y_reparar():
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
 
-    # 2. Función interna de reparación de columnas
+    # 2. Función interna para agregar columnas faltantes
     def agregar_col(tabla, columna, tipo):
         cursor.execute(f"PRAGMA table_info({tabla})")
         columnas = [info[1] for info in cursor.fetchall()]
@@ -26,123 +30,83 @@ def conectar_y_reparar():
             cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
 
     # 3. Reparar Viviendas
-    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita", "tipo_techo", "tipo_piso", "baño_tipo"]:
+    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
         agregar_col("viviendas", c, "TEXT")
     
     # 4. Reparar Integrantes
-    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por", "sexo", "nivel_ed", "estado_ed"]:
+    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
         agregar_col("integrantes", c, "TEXT")
 
     # 5. Reparar Vacunas
     for c in ["vacuna", "dosis", "fecha", "lote", "ronda", "registrado_por"]:
         agregar_col("vacunas", c, "TEXT")
 
-    # 6. Reparar Usuarios (Asegurar columna nombre)
-    agregar_col("usuarios", "nombre", "TEXT")
+    # Asegurar Admin por defecto
+    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
+    cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, rol, password) VALUES (?,?,?)", 
+                  ('admin', 'Administrador', admin_pass))
 
     conn.commit()
     return conn
 
-# --- 2. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(
-    page_title="APS Orán 2026",
-    page_icon="🏥", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-    <style>
-    .main { background-color: #F5F5F5; }
-    .stButton>button { border-radius: 20px; border: 1px solid #2E7D32; transition: all 0.3s; }
-    .stButton>button:hover { background-color: #2E7D32; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 3. FUNCIONES DE APOYO ---
-def obtener_conexion():
-    return sqlite3.connect('aps_oran_final.db')
-
-def hash_password(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def inicializar_db():
-    """Inserta datos maestros iniciales"""
+# --- 3. BLOQUE 0: INICIO (Antes llamado Dashboard) ---
+def bloque_0_inicio():
+    st.title("🏠 Sistema de Gestión APS - Orán")
     conn = conectar_y_reparar()
-    c = conn.cursor()
-    # Usuario admin por defecto especificando columnas para evitar OperationalError
-    admin_pass = hash_password('oran2026')
-    c.execute("INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)", 
-             ('admin', 'Admin Orán', 'Administrador', admin_pass))
-    c.execute("INSERT OR IGNORE INTO config (clave, valor) VALUES (?,?)", ('ronda_actual', '1'))
-    conn.commit()
-    conn.close()
-
-def obtener_ronda_info():
-    conn = obtener_conexion()
+    
     try:
-        res = pd.read_sql("SELECT valor FROM config WHERE clave='ronda_actual'", conn)
-        ronda = res.iloc[0]['valor'] if not res.empty else "1"
-    except:
-        ronda = "1"
-    finally:
-        conn.close()
-    return ronda, "Activa"
-
-# --- 4. BLOQUE 0: DASHBOARD ---
-def bloque_0_dashboard():
-    st.title("🏥 Panel de Control APS - Orán")
-    conn = conectar_y_reparar()
-    cursor = conn.cursor()
-
-    c1, c2, c3 = st.columns(3)
-    try:
-        total_p = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        total_c = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        ronda_v, _ = obtener_ronda_info()
+        # Métricas principales
+        res_p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        res_v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
-        c1.metric("Población Censada", f"{total_p} pers.")
-        c2.metric("Viviendas Relevadas", f"{total_c}")
-        c3.metric("Ronda Actual", f"N° {ronda_v}")
-    except:
-        st.info("Iniciando sistema... Realice su primera carga para ver métricas.")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Población Censada", f"{res_p} pers.")
+        c2.metric("Viviendas Relevadas", f"{res_v}")
+        c3.metric("Fecha de Hoy", date.today().strftime("%d/%m/%Y"))
 
-    st.divider()
+        st.divider()
 
-    col_alerta1, col_alerta2 = st.columns(2)
-
-    with col_alerta1:
-        st.subheader("🚩 Viviendas en Riesgo")
-        try:
-            query_riesgo = "SELECT nro_casa, prioridad, registrado_por FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')"
-            df_riesgo = pd.read_sql(query_riesgo, conn)
-            if not df_riesgo.empty:
-                for _, row in df_riesgo.iterrows():
-                    st.error(f"**Casa {row['nro_casa']}** - Prioridad: {row['prioridad']}")
+        # ALERTAS CRÍTICAS (Solicitadas el 07/01/2026)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("🚩 Viviendas en Riesgo")
+            df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
+            if not df_r.empty:
+                st.error(f"Hay {len(df_r)} viviendas críticas")
+                st.table(df_r)
             else:
                 st.success("✅ No hay riesgos críticos detectados.")
-        except:
-            st.info("Sin datos de viviendas aún.")
 
-    with col_alerta2:
-        st.subheader("👶 Alerta de Vacunación Infantil")
-        try:
-            fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-            query_vacunas = f"""
-                SELECT i.nombre, i.nro_casa
-                FROM integrantes i
-                LEFT JOIN vacunas v ON i.dni = v.dni
-                WHERE i.f_nac > '{fecha_limite}' AND v.dni IS NULL
+        with col2:
+            st.subheader("👶 Alerta Vacunación Infantil")
+            corte = (date.today() - timedelta(days=5*365)).isoformat()
+            query = f"""
+                SELECT nombre, nro_casa FROM integrantes 
+                WHERE f_nac > '{corte}' 
+                AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
             """
-            df_niños = pd.read_sql(query_vacunas, conn)
-            if not df_niños.empty:
-                st.warning(f"Hay {len(df_niños)} niños (<5 años) sin vacunas.")
-                st.dataframe(df_niños, use_container_width=True)
+            df_v = pd.read_sql(query, conn)
+            if not df_v.empty:
+                st.warning(f"Hay {len(df_v)} niños con vacunas pendientes")
+                st.dataframe(df_v, use_container_width=True)
             else:
-                st.success("✅ Vacunación infantil al día.")
-        except:
-            st.info("Sin datos de vacunas aún.")
-    conn.close()
+                st.success("✅ Niños con esquemas al día.")
+    finally:
+        conn.close()
+
+# --- 4. FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
+def main():
+    conectar_y_reparar()
+    
+    st.sidebar.title("Menú Principal")
+    # Nombre cambiado de Dashboard a Inicio
+    opcion = st.sidebar.selectbox("Seleccione Módulo:", ["🏠 Inicio", "📝 Registro Censo"])
+    
+    if opcion == "🏠 Inicio":
+        bloque_0_inicio()
+    elif opcion == "📝 Registro Censo":
+        st.write("---")
+        # Aquí continúa el resto de tu código del Bloque 1
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1588,6 +1552,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
