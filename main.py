@@ -120,66 +120,95 @@ def obtener_ronda_info():
     return ronda_manual, ronda_sugerida
 
 # ==========================================
-# BLOQUE 0: DASHBOARD OPERATIVO (PANTALLA PRINCIPAL)
+# BLOQUE 0: DASHBOARD OPERATIVO (ANTIFALLOS)
 # ==========================================
 def bloque_0_dashboard():
     nombre_real = st.session_state.get('nombre_agente', 'Agente')
     usuario_id = st.session_state.get('usuario_logueado', 'admin')
     
-    st.title(f"👋 ¡Buen día, {nombre_real}!")
-    st.write(f"Sector: Orán | Fecha: {date.today().strftime('%d/%m/%Y')}")
-
-    # --- SECCIÓN DE ALERTAS CRÍTICAS (SOLO EN PANTALLA PRINCIPAL) ---
-    st.subheader("🚨 Prioridades de Visita Domiciliaria")
-    st.info("La siguiente lista muestra las personas que requieren atención urgente en su sector.")
+    st.title(f"👋 Bienvenido/a, {nombre_real}")
+    st.caption(f"Gestión de Sector: {usuario_id} | Fecha: {date.today().strftime('%d/%m/%Y')}")
 
     conn = obtener_conexion()
     
-    # Query que cruza todos los riesgos (TBC, Embarazo, Nutrición y Vacunas)
-    query_alertas = """
-        SELECT i.nombre, i.dni, i.sector, 
-               CASE 
-                 WHEN t.estado = 'Activo' THEN '🔴 TBC Activo - Control DOTS'
-                 WHEN e.dni IS NOT NULL THEN '🟣 Embarazada - Control Prenatal'
-                 WHEN c.imc < 18.5 THEN '🟠 Bajo Peso - Riesgo Nutricional'
-                 WHEN v.estado = 'Incompleto' THEN '💉 Vacunación Pendiente'
-                 ELSE 'Control de Rutina'
-               END as motivo_riesgo
-        FROM integrantes i
-        LEFT JOIN tbc t ON i.dni = t.dni
-        LEFT JOIN controles_embarazo e ON i.dni = e.dni
-        LEFT JOIN crecimiento c ON i.dni = c.dni
-        LEFT JOIN vacunas v ON i.dni = v.dni
-        WHERE i.registrado_por = ? AND (
-            t.estado = 'Activo' OR 
-            e.dni IS NOT NULL OR 
-            c.imc < 18.5 OR 
-            v.estado = 'Incompleto'
-        )
-        GROUP BY i.dni
-    """
-    
-    df_alertas = pd.read_sql(query_alertas, conn, params=(usuario_id,))
-    conn.close()
+    # --- FUNCIÓN INTERNA PARA VALIDAR TABLAS ---
+    def tabla_existe(nombre_tabla):
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
+        return cursor.fetchone()[0] == 1
 
-    if not df_alertas.empty:
-        # Mostramos las alertas en tarjetas (Cards) llamativas
-        cols = st.columns(2)
-        for idx, row in df_alertas.iterrows():
-            with cols[idx % 2]:
-                st.error(f"**Paciente:** {row['nombre']}  \n**Motivo:** {row['motivo_riesgo']}  \n**DNI:** {row['dni']}")
-    else:
-        st.success("✅ No tienes visitas críticas pendientes para hoy. ¡Buen trabajo!")
+    st.subheader("🚨 Prioridades de Visita en Pantalla Principal")
+    
+    try:
+        alertas = []
+
+        # 1. Validar TBC
+        if tabla_existe('tbc'):
+            tbc_df = pd.read_sql("SELECT dni, '🔴 TBC Activo' as motivo FROM tbc WHERE estado='Activo' AND registrado_por=?", 
+                                 conn, params=(usuario_id,))
+            alertas.append(tbc_df)
+
+        # 2. Validar Embarazo
+        if tabla_existe('controles_embarazo'):
+            emb_df = pd.read_sql("SELECT dni, '🟣 Control Materno' as motivo FROM controles_embarazo WHERE registrado_por=?", 
+                                 conn, params=(usuario_id,))
+            alertas.append(emb_df)
+
+        # 3. Validar Nutrición (Bajo Peso)
+        if tabla_existe('crecimiento'):
+            nut_df = pd.read_sql("SELECT dni, '🟠 Bajo Peso' as motivo FROM crecimiento WHERE imc < 18.5 AND registrado_por=?", 
+                                 conn, params=(usuario_id,))
+            alertas.append(nut_df)
+
+        # 4. Validar Vacunas Incompletas (Tu requerimiento especial)
+        if tabla_existe('vacunas'):
+            vac_df = pd.read_sql("SELECT dni, '💉 Vacuna Pendiente' as motivo FROM vacunas WHERE estado='Incompleto' AND registrado_por=?", 
+                                 conn, params=(usuario_id,))
+            alertas.append(vac_df)
+
+        # --- MOSTRAR RESULTADOS ---
+        if alertas:
+            # Combinamos todas las alertas encontradas
+            df_total = pd.concat(alertas, ignore_index=True).drop_duplicates('dni')
+            
+            if not df_total.empty:
+                # Buscamos los nombres de estas personas en la tabla integrantes
+                dnis_alerta = tuple(df_total['dni'].tolist())
+                if len(dnis_alerta) == 1: dnis_query = f"('{dnis_alerta[0]}')"
+                else: dnis_query = str(dnis_alerta)
+                
+                nombres_df = pd.read_sql(f"SELECT dni, nombre FROM integrantes WHERE dni IN {dnis_query}", conn)
+                df_final = pd.merge(df_total, nombres_df, on='dni')
+
+                # Renderizado de Tarjetas
+                cols = st.columns(2)
+                for i, row in df_final.iterrows():
+                    with cols[i % 2]:
+                        st.error(f"**{row['motivo']}** \n👤 {row['nombre']} (DNI: {row['dni']})")
+            else:
+                st.success("✅ No hay visitas críticas pendientes en las tablas actuales.")
+        else:
+            st.info("ℹ️ Todavía no hay datos de salud registrados para generar alertas.")
+
+    except Exception as e:
+        st.warning("El sistema está sincronizando las tablas de salud. Registre un paciente para activar las alertas.")
+        # Opcional para debugear: st.write(e)
+    finally:
+        conn.close()
 
     st.divider()
-
-    # --- RESUMEN DE ESTADÍSTICAS RÁPIDAS ---
-    st.subheader("📊 Resumen del Sector")
-    # Aquí puedes añadir los indicadores que ya teníamos (Total familias, etc.)
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Casos TBC", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('TBC')]))
-    col2.metric("Embarazadas", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('Embarazada')]))
-    col3.metric("Riesgo Nutricional", len(df_alertas[df_alertas['motivo_riesgo'].str.contains('Bajo Peso')]))
+    
+    # --- MÉTRICAS DE RESUMEN ---
+    st.subheader("📊 Resumen del Estado del Sector")
+    c1, c2, c3 = st.columns(3)
+    # Aquí puedes poner conteos simples de integrantes registrados
+    conn = obtener_conexion()
+    total_pob = pd.read_sql("SELECT count(*) as total FROM integrantes WHERE registrado_por=?", conn, params=(usuario_id,))['total'][0]
+    conn.close()
+    
+    c1.metric("Población a Cargo", total_pob)
+    c2.metric("Ronda Actual", "1 (2026)")
+    c3.metric("Estado", "Activo")
 # ==========================================
 # BLOQUE 1: CENSO (ACTUALIZADO CON RONDA)
 # ==========================================
@@ -1235,4 +1264,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
