@@ -838,72 +838,101 @@ def bloque_6_tbc():
     else:
         st.info("👋 Ingrese el DNI del paciente para gestionar el tratamiento TBC.")
 # ==========================================
-# BLOQUE 7: ESTADÍSTICAS Y TABLA POBLACIONAL
+# BLOQUE 7: ESTADÍSTICAS DETALLADAS (APS)
 # ==========================================
 def bloque_7_estadisticas():
-    st.title("📊 Análisis Estadístico de Población")
+    st.title("📊 Distribución Poblacional Detallada")
     
     conn = sqlite3.connect('aps_oran_final.db')
     
-    # 1. Recuperar datos (necesitamos fecha de nacimiento y sexo)
-    query = "SELECT f_nac, sexo FROM integrantes"
-    df = pd.read_sql(query, conn)
-    
+    try:
+        query = "SELECT f_nac, sexo FROM integrantes"
+        df = pd.read_sql(query, conn)
+    except:
+        st.error("Error al acceder a la base de datos.")
+        return
+
     if df.empty:
-        st.warning("No hay datos cargados para generar la tabla estadística.")
+        st.warning("No hay datos cargados para generar la tabla.")
         conn.close()
         return
 
-    # 2. Limpieza de datos y cálculo de edad
+    # 1. Preparación de fechas
     df['f_nac'] = pd.to_datetime(df['f_nac'], errors='coerce')
-    df = df.dropna(subset=['f_nac', 'sexo']) # Eliminamos registros incompletos para el cálculo
-    
-    def calcular_edad(fecha):
-        today = date.today()
-        return today.year - fecha.year - ((today.month, today.day) < (fecha.month, fecha.day))
+    df = df.dropna(subset=['f_nac', 'sexo'])
+    hoy = pd.Timestamp(date.today())
 
-    df['edad'] = df['f_nac'].apply(calcular_edad)
+    # 2. Cálculo de edad en MESES totales para mayor precisión
+    def calcular_meses(fecha):
+        return (hoy.year - fecha.year) * 12 + (hoy.month - fecha.month) - (1 if hoy.day < fecha.day else 0)
 
-    # 3. Definir los Rangos de Edad Oficiales
-    bins = [0, 1, 6, 13, 20, 35, 50, 65, 120]
-    labels = ['< 1 año', '1-5 años', '6-12 años', '13-19 años', '20-34 años', '35-49 años', '50-64 años', '65+ años']
-    df['Rango Etario'] = pd.cut(df['edad'], bins=bins, labels=labels, right=False)
+    df['meses'] = df['f_nac'].apply(calcular_meses)
 
-    # 4. CREAR LA TABLA DE TOTALES (MASCULINO / FEMENINO)
-    st.subheader("📋 Tabla de Población por Edad y Sexo")
+    # 3. Función de clasificación según tus rangos exactos
+    def clasificar_aps(m):
+        if m < 6: return "0 a 5 meses"
+        if m < 12: return "6 a 11 meses"
+        if m < 24: return "1 año"
+        if m < 36: return "2 años"
+        if m < 48: return "3 años"
+        if m < 60: return "4 años"
+        if m < 72: return "5 años"
+        if m < 84: return "6 años"
+        if m < 120: return "7 a 9 años"
+        if m < 132: return "10 años"
+        if m < 144: return "11 años"
+        if m < 180: return "12 a 14 años"
+        if m < 240: return "15 a 19 años"
+        if m < 300: return "20 a 24 años"
+        if m < 360: return "25 a 29 años"
+        if m < 420: return "30 a 34 años"
+        if m < 480: return "35 a 39 años"
+        if m < 540: return "40 a 44 años"
+        if m < 600: return "45 a 49 años"
+        if m < 660: return "50 a 54 años"
+        if m < 720: return "55 a 59 años"
+        if m < 780: return "60 a 64 años"
+        return "65 años y más"
+
+    # Orden lógico de los rangos para la tabla
+    orden_rangos = [
+        "0 a 5 meses", "6 a 11 meses", "1 año", "2 años", "3 años", "4 años",
+        "5 años", "6 años", "7 a 9 años", "10 años", "11 años", "12 a 14 años",
+        "15 a 19 años", "20 a 24 años", "25 a 29 años", "30 a 34 años",
+        "35 a 39 años", "40 a 44 años", "45 a 49 años", "50 a 54 años",
+        "55 a 59 años", "60 a 64 años", "65 años y más"
+    ]
+
+    df['Rango APS'] = df['meses'].apply(clasificar_aps)
+
+    # 4. CREAR LA TABLA CRUZADA
+    st.subheader("👥 Matriz de Población por Sexo y Edad")
     
-    # Creamos la tabla cruzada
-    tabla = pd.crosstab(df['Rango Etario'], df['sexo'], dropna=False)
+    tabla = pd.crosstab(df['Rango APS'], df['sexo'])
     
-    # Aseguramos que existan ambas columnas aunque no haya datos
-    if 'Masculino' not in tabla.columns: tabla['Masculino'] = 0
-    if 'Femenino' not in tabla.columns: tabla['Femenino'] = 0
+    # Asegurar columnas y reindexar para mantener el orden de edad
+    for col in ['Masculino', 'Femenino']:
+        if col not in tabla.columns: tabla[col] = 0
     
-    # Reordenamos columnas y añadimos Total por Fila
-    tabla = tabla[['Masculino', 'Femenino']]
+    tabla = tabla.reindex(orden_rangos).fillna(0).astype(int)
     tabla['Total'] = tabla['Masculino'] + tabla['Femenino']
     
-    # Añadimos Fila de Totales Generales al final
-    totales_finales = pd.DataFrame({
-        'Masculino': [tabla['Masculino'].sum()],
-        'Femenino': [tabla['Femenino'].sum()],
-        'Total': [tabla['Total'].sum()]
-    }, index=['TOTAL GENERAL'])
+    # Fila de Totales Finales
+    tot_m = tabla['Masculino'].sum()
+    tot_f = tabla['Femenino'].sum()
+    tot_t = tabla['Total'].sum()
     
-    tabla_final = pd.concat([tabla, totales_finales])
-
-    # 5. MOSTRAR LA TABLA ESTILIZADA
-    st.table(tabla_final)
-
-    # 6. GRÁFICO COMPLEMENTARIO (Opcional)
-    st.divider()
-    fig = px.bar(df, x="Rango Etario", color="sexo", barmode="group",
-                 title="Distribución Visual por Grupos",
-                 labels={'count': 'Cantidad de Personas'})
-    st.plotly_chart(fig, use_container_width=True)
+    # Mostrar tabla con estilo
+    st.table(tabla)
+    
+    st.markdown(f"""
+    **RESUMEN GENERAL:**
+    * **Total Masculino:** {tot_m}
+    * **Total Femenino:** {tot_f}
+    * **Población Total:** {tot_t}
+    """)
 
     conn.close()
-
 # ==========================================
 # BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
 # ==========================================
@@ -1245,6 +1274,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
