@@ -1,257 +1,107 @@
 import streamlit as st
-import streamlit as st
 import pandas as pd
 import sqlite3
-def limpieza_total_interfaz():
+import hashlib
+import plotly.express as px
+import pydeck as pdk
+from datetime import datetime, date
+
+# =================================================================
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS (DEBE IR PRIMERO)
+# =================================================================
+st.set_page_config(
+    page_title="APS Orán 2026",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+def aplicar_estilos_interfaz():
     style = """
         <style>
-        /* Ocultar barra superior, menú y footer */
+        /* Ocultar elementos innecesarios */
         header {visibility: hidden;}
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        
-        /* Eliminar botones de Deploy y GitHub */
         .stAppDeployButton {display:none;}
         [data-testid="bundle-version-info"] {display:none;}
         [data-testid="stDecoration"] {display:none;}
         
-        /* Pegar el contenido al borde superior */
-        .block-container {
-            padding-top: 0rem;
+        /* Ajuste de contenedor */
+        .block-container {padding-top: 1rem;}
+        
+        /* Estilo de botones y fondo */
+        .main { background-color: #F5F5F5; }
+        .stButton>button {
+            border-radius: 20px;
+            border: 1px solid #2E7D32;
+            transition: all 0.3s;
+        }
+        .stButton>button:hover {
+            background-color: #2E7D32;
+            color: white;
         }
         </style>
     """
     st.markdown(style, unsafe_allow_html=True)
 
-# 2. Llamar a la limpieza
-limpieza_total_interfaz()
+aplicar_estilos_interfaz()
 
-# Luego sigue el resto de tu código (main, etc.)
-limpieza_total_interfaz()
-import streamlit as st
-
-def ocultar_menu_github():
-    hide_github_style = """
-        <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        /* Esto oculta específicamente el ícono de GitHub y el botón de Deploy */
-        .stAppDeployButton {display:none;}
-        [data-testid="bundle-version-info"] {display:none;}
-        </style>
-    """
-    st.markdown(hide_github_style, unsafe_allow_html=True)
-
-# Llama a la función al inicio de tu app
-ocultar_menu_github()
-def conectar_y_reparar():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    
-    # 1. Crear tablas base (Nivel 1: 4 espacios)
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT)")
-
-    # 2. Función interna (Nivel 1: 4 espacios)
-    def agregar_col(tabla, columna, tipo):
-        cursor.execute(f"PRAGMA table_info({tabla})") # Nivel 2: 8 espacios
-        columnas = [info[1] for info in cursor.fetchall()] # Nivel 2: 8 espacios
-        if columna not in columnas: # Nivel 2: 8 espacios
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}") # Nivel 3: 12 espacios
-
-    # 3. Reparar Viviendas (Nivel 1: 4 espacios)
-    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
-        agregar_col("viviendas", c, "TEXT") # Nivel 2: 8 espacios
-    
-    # 4. Reparar Integrantes (Línea 26 - Nivel 1: 4 espacios)
-    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
-        agregar_col("integrantes", c, "TEXT") # Nivel 2: 8 espacios
-
-    # 5. Reparar Vacunas (Nivel 1: 4 espacios)
-    for c in ["vacuna", "dosis", "fecha", "lote", "ronda", "registrado_por"]:
-        agregar_col("vacunas", c, "TEXT") # Nivel 2: 8 espacios
-
-    conn.commit()
-    return conn
-    
-import streamlit as st
-import pandas as pd
-import sqlite3
-import hashlib  
-import plotly.express as px
-from datetime import datetime, date
-
-# Después de las importaciones, pones tus funciones de apoyo
-def hash_password(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-    
-import streamlit as st
-
-st.set_page_config(
-    page_title="APS Orán 2026",
-    page_icon="🏥", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Estilo CSS personalizado para mejorar la apariencia de las tablas y tarjetas
-st.markdown("""
-    <style>
-    .main {
-        background-color: #F5F5F5;
-    }
-    .stButton>button {
-        border-radius: 20px;
-        border: 1px solid #2E7D32;
-        transition: all 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #2E7D32;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-# --- FUNCIONES DE BASE DE DATOS INTEGRADAS ---
+# =================================================================
+# 2. FUNCIONES DE BASE DE DATOS Y UTILIDADES
+# =================================================================
 def obtener_conexion():
-    """Crea la conexión a la base de datos local"""
     return sqlite3.connect('aps_oran_final.db')
 
 def inicializar_db():
-    """Crea todas las tablas si no existen al iniciar la app"""
+    """Crea y repara todas las tablas necesarias"""
     conn = obtener_conexion()
     c = conn.cursor()
-    # Tabla de Integrantes
+    
+    # Tablas Base
     c.execute('''CREATE TABLE IF NOT EXISTS integrantes (
-        dni TEXT PRIMARY KEY, nro_aps TEXT, familia TEXT, nombre TEXT, f_nac TEXT, sexo TEXT,
-        nivel_ed TEXT, estado_ed TEXT, latitud REAL, longitud REAL, obra_social TEXT, 
-        fecha_registro TEXT, registrado_por TEXT, tenencia TEXT, agua TEXT, excretas TEXT, 
-        basura TEXT, cocina TEXT, produccion TEXT, techo TEXT, piso TEXT, paredes TEXT)''')
-    # Tabla de Usuarios
+        dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, 
+        registrado_por TEXT, sexo TEXT, nivel_ed TEXT, estado_ed TEXT, 
+        latitud REAL, longitud REAL, obra_social TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS viviendas (
+        nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, 
+        baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-        usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)''')
-    # Tabla de Vacunas
+        usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT, supervisor_asignado TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS vacunas (
-        dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, registrado_por TEXT)''')
-    # Tabla de TBC
+        dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS tbc (
         dni TEXT, tipo TEXT, fase TEXT, toma INTEGER, fecha_muestra TEXT, estado TEXT, registrado_por TEXT)''')
-    # Tabla Materno
-    c.execute('''CREATE TABLE IF NOT EXISTS controles_embarazo (
-        dni TEXT, fum TEXT, fpp TEXT, fde TEXT, m_1ro TEXT, m_2do TEXT, m_3ro TEXT, 
-        parto_fecha TEXT, parto_lugar TEXT, aborto TEXT, registrado_por TEXT)''')
-    # Tabla Nutrición
-    c.execute('''CREATE TABLE IF NOT EXISTS crecimiento (
-        dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT)''')
+
+    # Usuario admin por defecto
+    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
+    c.execute("INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)", 
+             ('admin', 'Admin Orán', 'Administrador', admin_pass))
     
-    # Usuario admin por defecto (Pass: oran2026)
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES (?,?,?,?)", 
-             ('admin', 'Admin Orán', 'Administrador', hashlib.sha256(str.encode('oran2026')).hexdigest()))
     conn.commit()
     conn.close()
 
 def hash_password(password):
-    """Encripta las contraseñas"""
     return hashlib.sha256(str.encode(password)).hexdigest()
 
-def chequear_vacunas_faltantes(dni):
-    """Lógica de alertas de vacunas"""
-    vacunas_obligatorias = ["BCG", "Hepatitis B", "Quintuple", "Fiebre Amarilla"]
-    conn = obtener_conexion()
-    try:
-        aplicadas = pd.read_sql("SELECT vacuna FROM vacunas WHERE dni=?", conn, params=(dni,))['vacuna'].tolist()
-    except: aplicadas = []
-    finally: conn.close()
-    return [v for v in vacunas_obligatorias if v not in aplicadas]
-# Al inicio de la función main, llamas a la inicialización
-def main():
-    inicializar_db() # Esto asegura que las tablas existan antes de que el usuario haga login
-    # ... resto del código ...
-import streamlit as st
-import sqlite3
-import pandas as pd
-import pydeck as pdk
-from datetime import datetime, date
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
-# ==========================================
-# FUNCIONES DE SOPORTE (Copiar antes del Bloque 0)
-# ==========================================
+# =================================================================
+# 3. BLOQUES DE CONTENIDO
+# =================================================================
 
-def obtener_equipo_agentes(nombre_supervisor):
-    """Busca en la DB todos los agentes asignados a este supervisor"""
-    conn = obtener_conexion()
-    try:
-        query = "SELECT usuario FROM usuarios WHERE supervisor_asignado = ?"
-        df = pd.read_sql(query, conn, params=(nombre_supervisor,))
-        lista_equipo = df['usuario'].tolist()
-    except:
-        lista_equipo = []
-    finally:
-        conn.close()
-    
-    lista_equipo.append(nombre_supervisor) # Incluimos al supervisor
-    return lista_equipo
-
-def obtener_ronda_info():
-    """Calcula ronda por fecha y recupera la manual de la DB"""
-    mes_actual = datetime.now().month
-    ronda_sugerida = (mes_actual - 1) // 3 + 1
-    
-    conn = obtener_conexion()
-    try:
-        res = pd.read_sql("SELECT valor FROM configuracion WHERE parametro='ronda_actual'", conn)
-        ronda_manual = int(res.iloc[0]['valor'])
-    except:
-        ronda_manual = ronda_sugerida
-    finally:
-        conn.close()
-    return ronda_manual, ronda_sugerida
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
 def bloque_0_dashboard():
     st.title("🏠 Panel de Control APS - Orán")
     
     try:
-        conn = sqlite3.connect('aps_oran_final.db')
+        conn = obtener_conexion()
         
-        # Métricas
+        # Métricas principales
         total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
         
+        # Alerta Vacunas (Pendiente 07/01/2026)
         query_vacunas = """
             SELECT COUNT(*) as cant FROM integrantes 
             WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
@@ -259,64 +109,71 @@ def bloque_0_dashboard():
         ninos_sin_vacuna = pd.read_sql(query_vacunas, conn).iloc[0]['cant']
 
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Población Total", f"{total_personas} hab.")
-        with col2:
-            st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Sin registro", delta_color="inverse")
-        with col3:
-            try:
-                casos_activos = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
-                st.metric("Casos TBC", f"{casos_activos} activos", delta="Seguimiento")
-            except:
-                st.metric("Casos TBC", "0 activos")
+        col1.metric("Población Total", f"{total_personas} hab.")
+        col2.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Sin registro", delta_color="inverse")
+        
+        try:
+            casos_tbc = pd.read_sql("SELECT COUNT(*) as cant FROM tbc WHERE estado='Activo'", conn).iloc[0]['cant']
+            col3.metric("Casos TBC", f"{casos_tbc} activos")
+        except:
+            col3.metric("Casos TBC", "0 activos")
 
         st.divider()
         st.subheader("📌 Estado del Sistema")
         st.info("""
-            **Nota del 07/01/2026:**
+            **Actualización 09/01/2026:**
             * Las alertas de vacunación están sincronizadas con el **Bloque 11**.
-            * Para cambiar su contraseña de acceso, diríjase al **Bloque 9 (Configuración)**.
+            * Para cambiar su contraseña, diríjase al **Bloque 9 (Admin)**.
         """)
         conn.close()
-
     except Exception as e:
-        st.error(f"Error técnico en el Dashboard: {e}")
-    
-    st.caption("Actualizado: Enero 2026")
+        st.error(f"Error en Dashboard: {e}")
 
-# --- ESTA ES LA PARTE QUE HACE QUE APAREZCA LA BARRA LATERAL ---
+def bloque_11_vigilancia():
+    st.header("🚨 Vigilancia y Alertas")
+    st.write("Listado de niños menores de 5 años con vacunas pendientes.")
+    # Aquí iría el DataFrame de niños con alertas
+    pass
+
+# =================================================================
+# 4. MOTOR DE NAVEGACIÓN (MAIN)
+# =================================================================
 
 def main():
-    # Configuramos la barra lateral antes que cualquier otra cosa
-    st.sidebar.title("🏥 Menú APS Orán")
-    st.sidebar.markdown("---")
-    
-    opciones = [
-        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
-    ]
+    # Inicializar DB siempre al arrancar
+    inicializar_db()
 
-    # La clave 'key' evita el error de duplicados
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones, key="nav_oran_2026")
+    # Configuración de la BARRA LATERAL
+    with st.sidebar:
+        st.title("🏥 APS Orán")
+        st.markdown("---")
+        
+        opciones = [
+            "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+            "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+            "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+            "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+        ]
 
-    # Lógica de navegación
+        # La clave 'key' es vital para evitar errores de duplicados
+        menu = st.selectbox("Seleccione un Bloque:", opciones, key="nav_principal_2026")
+        
+        st.markdown("---")
+        st.caption("Sistema de Gestión APS v1.2")
+
+    # Lógica de despliegue de bloques
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     elif menu == "🚨 11. Vigilancia Alertas":
-        # Asegúrate de que esta función exista arriba en tu código
-        if 'bloque_11_vigilancia_epidemiologica' in globals():
-            bloque_11_vigilancia_epidemiologica()
-        else:
-            st.warning("El Bloque 11 aún no está definido.")
+        bloque_11_vigilancia()
     elif menu == "⚙️ 9. Admin":
-        # Aquí es donde pondrás el cambio de contraseña solicitado el 07/01
-        st.info("Configuraciones del sistema y cambio de contraseña.")
+        st.subheader("⚙️ Configuración del Sistema")
+        st.write("Sección para cambio de contraseña (Instrucción 07/01/2026)")
+        # Aquí llamarías a tu bloque_9_configuracion()
     else:
-        st.write(f"Has seleccionado: {menu}")
+        st.info(f"El bloque **{menu}** está listo para ser desarrollado.")
 
-# DISPARADOR ÚNICO: Debe estar al final de TODO el archivo
+# EL DISPARADOR FINAL: Sin espacios a la izquierda
 if __name__ == "__main__":
     main()
 # ==========================================
@@ -1731,6 +1588,7 @@ def main():
 # =================================================================
 if __name__ == "__main__":
     main()
+
 
 
 
