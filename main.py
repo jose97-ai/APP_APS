@@ -49,64 +49,53 @@ def conectar_y_reparar():
     conn.commit()
     return conn
 
-# --- 3. BLOQUE 0: INICIO (Antes llamado Dashboard) ---
+# 3. PANTALLA DE INICIO (Bloque 0)
 def bloque_0_inicio():
-    st.title("🏠 Sistema de Gestión APS - Orán")
-    conn = conectar_y_reparar()
+    st.title("🏥 Sistema APS Orán - Inicio")
+    conn = inicializar_db()
     
     try:
-        # Métricas principales
+        # Métricas
         res_p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
         res_v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Población Censada", f"{res_p} pers.")
-        c2.metric("Viviendas Relevadas", f"{res_v}")
-        c3.metric("Fecha de Hoy", date.today().strftime("%d/%m/%Y"))
+        c1.metric("Población", f"{res_p} pers.")
+        c2.metric("Viviendas", f"{res_v}")
+        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
 
         st.divider()
 
-        # ALERTAS CRÍTICAS (Solicitadas el 07/01/2026)
+        # Alertas críticas
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("🚩 Viviendas en Riesgo")
+            st.subheader("🚩 Riesgo Habitacional")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            if not df_r.empty:
-                st.error(f"Hay {len(df_r)} viviendas críticas")
-                st.table(df_r)
-            else:
-                st.success("✅ No hay riesgos críticos detectados.")
+            st.dataframe(df_r, use_container_width=True) if not df_r.empty else st.success("Sin riesgos")
 
         with col2:
-            st.subheader("👶 Alerta Vacunación Infantil")
+            st.subheader("👶 Alerta Vacunación (<5 años)")
             corte = (date.today() - timedelta(days=5*365)).isoformat()
-            query = f"""
-                SELECT nombre, nro_casa FROM integrantes 
-                WHERE f_nac > '{corte}' 
-                AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-            """
+            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{corte}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
             df_v = pd.read_sql(query, conn)
-            if not df_v.empty:
-                st.warning(f"Hay {len(df_v)} niños con vacunas pendientes")
-                st.dataframe(df_v, use_container_width=True)
-            else:
-                st.success("✅ Niños con esquemas al día.")
+            st.warning(f"{len(df_v)} niños pendientes") if not df_v.empty else st.success("Al día")
     finally:
         conn.close()
 
-# --- 4. FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
+# 4. FUNCIÓN PRINCIPAL (MAIN)
 def main():
-    conectar_y_reparar()
+    # Ahora esta función sí existe y se llama correctamente
+    inicializar_db() 
     
     st.sidebar.title("Menú Principal")
-    # Nombre cambiado de Dashboard a Inicio
-    opcion = st.sidebar.selectbox("Seleccione Módulo:", ["🏠 Inicio", "📝 Registro Censo"])
+    # Menú como 'Inicio' como pediste
+    opcion = st.sidebar.selectbox("Seleccione:", ["🏠 Inicio", "📝 Registro Censo"])
     
     if opcion == "🏠 Inicio":
         bloque_0_inicio()
     elif opcion == "📝 Registro Censo":
         st.write("---")
-        # Aquí continúa el resto de tu código del Bloque 1
+        # Aquí continúa tu código del Bloque 1
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1552,3 +1541,4 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
