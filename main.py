@@ -90,7 +90,7 @@ def obtener_ronda_info():
     return ronda, "Activa"
 
 # --- 4. BLOQUE 0: DASHBOARD ---
-def bloque_0_dashboard():
+def bloque_0_PANEL():
     st.title("🏥 Panel de Control APS - Orán")
     conn = conectar_y_reparar()
     cursor = conn.cursor()
@@ -1588,6 +1588,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
