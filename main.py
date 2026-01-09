@@ -1631,15 +1631,13 @@ def bloque_11_vigilancia_epidemiologica():
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
 # ==========================================
-# FUNCIÓN PRINCIPAL (EL MOTOR DEL MENÚ)
+# FINAL DEL ARCHIVO: LÓGICA DE NAVEGACIÓN
 # ==========================================
-# --- FINAL DEL ARCHIVO ---
 
-# 1. Asegúrate de que esta función NO tenga errores de espacios
 def main():
-    # Este comando fuerza la aparición de la barra lateral SI O SI
-    st.sidebar.title("🏥 Sistema APS Orán")
-    st.sidebar.write("---")
+    # PASO A: Configuración de la barra lateral (Esto aparece primero)
+    st.sidebar.title("🏥 APS Orán")
+    st.sidebar.markdown("---")
     
     opciones = [
         "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
@@ -1648,24 +1646,26 @@ def main():
         "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # Creamos el selector
+    # PASO B: El selector de menú
     menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
 
-    # Lógica de visualización
+    # PASO C: Disparador de funciones
+    # Solo se ejecuta la función que coincide con el menú
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     elif menu == "🛠️ 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
     elif menu == "🚨 11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
-    # Si falta conectar algún bloque, el sistema no se romperá:
+    elif menu == "⚙️ 9. Admin":
+        bloque_9_configuracion()
     else:
-        st.info(f"Sección seleccionada: {menu}. Verifique que la función esté conectada en el código.")
+        st.info(f"Sección en desarrollo: {menu}")
 
-# 2. EL DISPARADOR (MUY IMPORTANTE)
-# Estas líneas deben estar pegadas al margen izquierdo, sin un solo espacio antes.
+# PASO D: El arranque oficial (PEGADO AL MARGEN IZQUIERDO)
 if __name__ == "__main__":
     main()
+
 
 
 
