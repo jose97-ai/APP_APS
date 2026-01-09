@@ -19,7 +19,7 @@ def agregar_col(tabla, columna, tipo):
 
     # 3. Reparar cada tabla con las columnas que pediste
     # Viviendas
-    for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
+for c in ["prioridad", "fuente_agua", "tenencia", "registrado_por", "fecha_visita"]:
         agregar_col("viviendas", c, "TEXT")
     
     # Integrantes
@@ -1585,6 +1585,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
