@@ -1929,13 +1929,17 @@ def bloque_11_vigilancia_epidemiologica():
 # =================================================================
 # MOTOR DE NAVEGACIÓN (VERSIÓN DE RESCATE)
 # =================================================================
-
 def main():
-    # 1. Forzamos el estado de la barra lateral
+    # 1. Inicialización obligatoria de Base de Datos y Reparación
+    try:
+        conectar_y_reparar()
+    except Exception as e:
+        st.error(f"Error al conectar/reparar la base de datos: {e}")
+
+    # 2. Configuración de la barra lateral
     st.sidebar.title("🏥 Gestión APS Orán")
-    st.sidebar.info("Fecha de acceso: 09/01/2026")
+    st.sidebar.info(f"Fecha: {date.today().strftime('%d/%m/%Y')}")
     
-    # 2. Definición de opciones
     opciones = [
         "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
         "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
@@ -1943,39 +1947,55 @@ def main():
         "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # 3. El Selector (con una clave totalmente nueva)
     menu = st.sidebar.selectbox(
         "Seleccione un Bloque:", 
         opciones, 
-        key="menu_rescate_final_v1"
+        key="menu_aps_final_total"
     )
 
-    # 4. Lógica de visualización
+    # 3. CONEXIÓN DE TODOS LOS BLOQUES (El "Tablero Eléctrico")
     if menu == "🏠 Panel de Control":
-        # Ejecutamos el dashboard que ya tienes definido
         bloque_0_dashboard()
     
-    elif menu == "🚨 11. Vigilancia Alertas":
-        # Aquí cumplimos tu pedido del 07/01
-        st.header("🚨 Alertas de Vacunación")
-        st.write("Cargando listado nominal de niños...")
-        # Lógica del bloque 11...
-        
-    elif menu == "⚙️ 9. Admin":
-        st.header("⚙️ Configuración")
-        st.subheader("Cambio de Contraseña")
-        st.write("Instrucción: Ingrese su nueva clave abajo.")
-        # Aquí irá el formulario que me pediste
+    elif "1. Censo" in menu:
+        # Asegúrate de que tu función se llame así, o cámbiala por el nombre real
+        bloque_1_censo() 
     
-    else:
-        st.info(f"Has seleccionado {menu}. Si la pantalla no cambia, revisa si hay un error de código en ese bloque específico.")
+    elif "2. Materno" in menu:
+        bloque_2_materno()
+    
+    elif "3. Vivienda" in menu:
+        bloque_3_vivienda()
+    
+    elif "4. Vacunas" in menu:
+        bloque_4_vacunas()
+        
+    elif "5. Nutrición" in menu:
+        bloque_5_nutricion()
+        
+    elif "6. TBC" in menu:
+        bloque_6_tbc()
+        
+    elif "7. Estadísticas" in menu:
+        bloque_7_estadisticas()
+        
+    elif "8. Mapas" in menu:
+        bloque_8_mapas()
+        
+    elif "9. Admin" in menu:
+        # Aquí incluimos lo que pediste el 07/01 (Cambio de pass)
+        bloque_9_configuracion()
+        
+    elif "10. Gestión Avanzada" in menu:
+        bloque_10_gestion_avanzada()
+        
+    elif "11. Vigilancia Alertas" in menu:
+        # Aquí aparecen los niños sin vacunas
+        bloque_11_vigilancia_alertas()
 
-# EL DISPARADOR (PEGADO AL MARGEN IZQUIERDO)
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Error crítico al cargar el menú: {e}")
+    st.sidebar.divider()
+    st.sidebar.caption("APS Orán - Sistema Protegido")
+
 
 
 
