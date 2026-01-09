@@ -1633,40 +1633,38 @@ def bloque_11_vigilancia_epidemiologica():
 # ==========================================
 # FINAL DEL ARCHIVO: LÓGICA DE NAVEGACIÓN
 # ==========================================
+# --- FINAL DEL ARCHIVO ---
 
 def main():
-    # PASO A: Configuración de la barra lateral (Esto aparece primero)
-    st.sidebar.title("🏥 APS Orán")
-    st.sidebar.markdown("---")
-    
-    opciones = [
-        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
-        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
-        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
-    ]
+    # 1. Forzamos la barra lateral (con 'with st.sidebar')
+    with st.sidebar:
+        st.title("🏥 Menú APS Orán")
+        st.divider()
+        
+        opciones = [
+            "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+            "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+            "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+            "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
+        ]
 
-    # PASO B: El selector de menú
-    menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
+        # Creamos el selector de menú
+        menu = st.selectbox("Seleccione un Bloque:", opciones)
 
-    # PASO C: Disparador de funciones
-    # Solo se ejecuta la función que coincide con el menú
+    # 2. Lógica para mostrar los bloques
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     elif menu == "🛠️ 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
     elif menu == "🚨 11. Vigilancia Alertas":
         bloque_11_vigilancia_epidemiologica()
-    elif menu == "⚙️ 9. Admin":
-        bloque_9_configuracion()
     else:
-        st.info(f"Sección en desarrollo: {menu}")
+        st.info(f"Has seleccionado: {menu}. Verifique que la función esté conectada.")
 
-# PASO D: El arranque oficial (PEGADO AL MARGEN IZQUIERDO)
+# --- ESTO ES LO QUE ESTABA FALTANDO O MAL UBICADO ---
+# Asegúrate de que no haya espacios antes de 'if' ni antes de 'main()'
 if __name__ == "__main__":
     main()
-st.sidebar.error("PRUEBA DE VIDA: SI LEES ESTO EL MENÚ FUNCIONA")
-st.write("### Si lees esto, el código llegó hasta el final")
 
 
 
