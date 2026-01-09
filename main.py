@@ -248,57 +248,62 @@ def inicializar_tablas_sistema():
 # BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
-    st.write("### LA FUNCIÓN MAIN ESTÁ CARGANDO") # <--- Agrega esto
-    st.sidebar.header("ESTO DEBE APARECER A LA IZQUIERDA") # <--- Y esto
-    
-    opciones = [ ... ]
     st.title("🏠 Panel de Control APS - Orán")
     
-    conn = sqlite3.connect('aps_oran_final.db')
-    
-    # 1. MÉTRICAS PRINCIPALES
-    total_personas = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn).iloc[0]['total']
-    
-    # Alerta de Vacunas (Lógica según tu nota del 07/01/2026)
-    ninos_sin_vacuna = pd.read_sql("""
-        SELECT COUNT(*) as cant FROM integrantes 
-        WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-    """, conn).iloc[0]['cant']
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Población Total", f"{total_personas} hab.")
-    with col2:
-        # El delta en "inverse" pone el color rojo si el número es alto
-        st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Pendientes", delta_color="inverse")
-    with col3:
-        # Traemos casos de TBC reales de tu tabla
-        tbc_count = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
-        st.metric("Casos TBC", f"{tbc_count} activos", delta="Seguimiento")
-
-    st.divider()
-
-    # 2. GRÁFICO DE PROGRESO DIARIO
-    st.subheader("📊 Censo en la última semana")
-    # Nota: Asumimos que tienes una columna 'fecha_registro' en integrantes
     try:
-        df_fecha = pd.read_sql("""
-            SELECT fecha_registro, COUNT(dni) as cantidad 
-            FROM integrantes 
-            GROUP BY fecha_registro 
-            ORDER BY fecha_registro DESC LIMIT 7
-        """, conn)
-        
-        if not df_fecha.empty:
-            st.line_chart(df_fecha.set_index('fecha_registro'))
-        else:
-            st.info("Aún no hay datos históricos para mostrar el gráfico.")
-    except:
-        st.caption("Gráfico diario disponible al activar registro de fecha.")
+        # Usamos un context manager (with) para asegurar que la conexión se cierre sola
+        with sqlite3.connect('aps_oran_final.db') as conn:
+            # 1. MÉTRICAS PRINCIPALES
+            # Total de personas
+            df_total = pd.read_sql("SELECT COUNT(*) as total FROM integrantes", conn)
+            total_personas = df_total.iloc[0]['total']
+            
+            # Alerta de Vacunas (Lógica solicitada el 07/01/2026)
+            # Buscamos integrantes que no estén en la tabla de vacunas
+            query_vacunas = """
+                SELECT COUNT(*) as cant FROM integrantes 
+                WHERE dni NOT IN (SELECT DISTINCT dni FROM vacunas)
+            """
+            ninos_sin_vacuna = pd.read_sql(query_vacunas, conn).iloc[0]['cant']
 
-    # 3. ACCESO RÁPIDO
-    st.info("💡 **Consejo para Supervisor:** Los detalles nominales de los niños sin vacunas están en el **Bloque 11: Vigilancia**.")
-    conn.close()
+            # Casos de TBC
+            try:
+                tbc_count = pd.read_sql("SELECT COUNT(*) as cant FROM tbc", conn).iloc[0]['cant']
+            except:
+                tbc_count = 0
+
+            # 2. DISEÑO DE TARJETAS
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Población Total", f"{total_personas} hab.")
+            with col2:
+                # Color rojo (inverse) para alertar sobre vacunas faltantes
+                st.metric("Alerta Vacunación", f"{ninos_sin_vacuna} niños", delta="Pendientes", delta_color="inverse")
+            with col3:
+                st.metric("Casos TBC", f"{tbc_count} activos", delta="Prioridad")
+
+            st.divider()
+
+            # 3. RESUMEN DE ACTIVIDAD
+            st.subheader("📊 Resumen de Carga por Agente")
+            query_agentes = """
+                SELECT registrado_por as Agente, COUNT(dni) as Total 
+                FROM integrantes 
+                GROUP BY registrado_por 
+                ORDER BY Total DESC LIMIT 5
+            """
+            df_agentes = pd.read_sql(query_agentes, conn)
+            
+            if not df_agentes.empty:
+                st.bar_chart(df_agentes.set_index('Agente'))
+            else:
+                st.info("No hay datos suficientes para mostrar el gráfico de agentes.")
+
+    except Exception as e:
+        st.error(f"Error al cargar el Dashboard: {e}")
+        st.info("Asegúrese de que la base de datos 'aps_oran_final.db' existe y tiene las tablas correctas.")
+
+    st.info("💡 **Dato:** Puede ver el listado detallado de alertas en el **Bloque 11: Vigilancia**.")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1700,6 +1705,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
