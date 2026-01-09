@@ -547,112 +547,90 @@ def bloque_3_vivienda():
 
     conn.close()
 # ==========================================
-# BLOQUE 4: VACUNAS (CON ALERTAS Y JERARQUÍA)
+# BLOQUE 4: VACUNAS (REPARADO)
 # ==========================================
 def bloque_4_vacunas():
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Agente')
-    ronda_actual_valor, _ = obtener_ronda_info()
+    st.header("💉 Registro de Vacunación")
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
 
-    st.header(f"💉 Bloque 4: Inmunizaciones - Ronda N° {ronda_actual_valor}")
+    # 1. REPARACIÓN DE TABLA VACUNAS
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
     
-    # 1. Manual de Usuario integrado
-    with st.expander("📖 Manual: Gestión de Carnet y Alertas"):
-        st.write(f"""
-        - **Privacidad:** Los agentes solo gestionan sus pacientes. Supervisores ven a todo su equipo.
-        - **Ronda:** El registro queda vinculado a la Ronda actual ({ronda_actual_valor}).
-        - **Alertas Críticas:** Prioridad absoluta a la **Fiebre Amarilla** por ser zona de riesgo (Orán).
-        """)
-    
-    dni_v = st.text_input("🔍 Ingrese DNI del paciente para gestionar vacunas", key="busqueda_vacuna")
-    
+    # Columnas necesarias para el carnet
+    cols_vacunas = {
+        "vacuna": "TEXT",
+        "dosis": "TEXT",
+        "fecha": "TEXT",
+        "lote": "TEXT",
+        "ronda": "TEXT DEFAULT '1'",
+        "registrado_por": "TEXT"
+    }
+
+    cursor.execute("PRAGMA table_info(vacunas)")
+    cols_actuales = [info[1] for info in cursor.fetchall()]
+
+    for col, tipo in cols_vacunas.items():
+        if col not in cols_actuales:
+            try:
+                cursor.execute(f"ALTER TABLE vacunas ADD COLUMN {col} {tipo}")
+            except: pass
+    conn.commit()
+
+    # 2. SELECCIÓN DE INTEGRANTE
+    dni_v = st.text_input("Ingrese DNI del integrante para ver/cargar vacunas:")
+
     if dni_v:
-        conn = obtener_conexion()
+        # Buscamos nombre del integrante
+        res = cursor.execute("SELECT nombre FROM integrantes WHERE dni = ?", (dni_v,)).fetchone()
         
-        # --- LÓGICA DE PERMISOS (JERARQUÍA) ---
-        if rol_actual == "Supervisor":
-            equipo = obtener_equipo_agentes(usuario_actual)
-            placeholders = ', '.join(['?'] * len(equipo))
-            query_persona = f"SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
-            params = [dni_v] + equipo
-        elif rol_actual == "Administrador":
-            query_persona = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=?"
-            params = [dni_v]
-        else:
-            query_persona = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
-            params = [dni_v, usuario_actual]
+        if res:
+            st.subheader(f"Paciente: {res[0]}")
+            
+            # Obtener ronda actual del sistema
+            try:
+                r_res = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+                ronda_sis = r_res[0] if r_res else "1"
+            except: ronda_sis = "1"
 
-        persona = pd.read_sql(query_persona, conn, params=params)
-        
-        if not persona.empty:
-            nombre = persona['nombre'].iloc[0]
-            agente_responsable = persona['registrado_por'].iloc[0]
-            f_nac_raw = persona['f_nac'].iloc[0]
-            f_nac = datetime.strptime(f_nac_raw, '%Y-%m-%d').date()
-            
-            # Cálculo de edad
-            hoy = date.today()
-            edad_meses = (hoy.year - f_nac.year) * 12 + hoy.month - f_nac.month
-            
-            st.subheader(f"👤 Paciente: {nombre}")
-            st.caption(f"Edad: {edad_meses} meses | Cargado por: {agente_responsable}")
-            
-            # --- ALERTAS DE COBERTURA ---
-            st.markdown("### 🔔 Alertas de Esquema")
-            faltantes = chequear_vacunas_faltantes(dni_v)
-            
-            if faltantes:
-                for v_faltante in faltantes:
-                    if v_faltante == "Fiebre Amarilla":
-                        st.error(f"🚨 **CRÍTICO:** Falta {v_faltante} (Zona de Riesgo Orán)")
-                    else:
-                        st.warning(f"❌ Pendiente: {v_faltante}")
-            else:
-                st.success("✅ Esquema de vacunación al día para la edad.")
-
-            # --- PESTAÑAS: REGISTRO Y CARNET ---
-            tab_reg, tab_carnet = st.tabs(["📝 Registrar Aplicación", "🗂️ Carnet Digital"])
-            
-            with tab_reg:
-                with st.form("nuevo_registro_vacuna", clear_on_submit=True):
-                    c1, c2 = st.columns(2)
-                    v_nom = c1.selectbox("Vacuna", ["BCG", "Hepatitis B", "Neumococo", "Quintuple", "IPV", 
-                                                 "Rotavirus", "Meningococo", "Triple Viral", "Antigripal", 
-                                                 "Fiebre Amarilla", "Varicela"])
-                    v_dosis = c2.selectbox("Dosis", ["RN", "1ra", "2da", "3ra", "Refuerzo", "Anual"])
+            # 3. FORMULARIO DE CARGA
+            with st.expander("➕ Registrar Nueva Aplicación"):
+                with st.form("form_nueva_vacuna"):
+                    v_nombre = st.selectbox("Vacuna:", ["Sabin", "Quintuple", "Triple Viral", "Antigripal", "Hepatitis B", "Otras"])
+                    v_dosis = st.selectbox("Dosis:", ["1ra", "2da", "3ra", "Refuerzo", "Única"])
+                    v_fecha = st.date_input("Fecha de Aplicación:")
+                    v_lote = st.text_input("Lote (Opcional):")
                     
-                    c3, c4 = st.columns(2)
-                    v_fecha = c3.date_input("Fecha de Aplicación", value=hoy)
-                    v_lote = c4.text_input("N° de Lote / Serie")
-                    
-                    if st.form_submit_button("💾 Guardar en Historial"):
-                        try:
-                            conn.execute("""INSERT INTO vacunas (dni, vacuna, dosis, fecha, lote, registrado_por, ronda) 
-                                         VALUES (?,?,?,?,?,?,?)""",
-                                        (dni_v, v_nom, v_dosis, str(v_fecha), v_lote, usuario_actual, ronda_actual_valor))
-                            conn.commit()
-                            st.success(f"✅ Registrada: {v_nom} ({v_dosis})")
-                            st.rerun()
-                        except sqlite3.OperationalError:
-                            conn.execute("ALTER TABLE vacunas ADD COLUMN ronda TEXT")
-                            conn.commit()
-                            st.info("Actualizando base de datos... Por favor reintente.")
+                    if st.form_submit_button("Guardar Vacuna"):
+                        usuario = st.session_state.get('usuario_logueado', 'admin')
+                        cursor.execute("""
+                            INSERT INTO vacunas (dni, vacuna, dosis, fecha, lote, ronda, registrado_por)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (dni_v, v_nombre, v_dosis, v_fecha.isoformat(), v_lote, ronda_sis, usuario))
+                        conn.commit()
+                        st.success(f"✅ Vacuna {v_nombre} registrada.")
+                        st.rerun()
 
-            with tab_carnet:
-                st.markdown("### 📜 Historial Completo")
-                df_c = pd.read_sql(f"""SELECT vacuna as 'Vacuna', dosis as 'Dosis', 
-                                   fecha as 'Fecha', lote as 'Lote', ronda as 'Ronda' 
-                                   FROM vacunas WHERE dni=? ORDER BY fecha DESC""", conn, params=(dni_v,))
+            # 4. HISTORIAL DE VACUNAS (Carnet Digital)
+            st.write("### 📜 Carnet de Vacunación")
+            try:
+                # Ahora la consulta NO fallará porque 'ronda' ya existe
+                df_c = pd.read_sql(f"""
+                    SELECT vacuna as 'Vacuna', dosis as 'Dosis', 
+                    fecha as 'Fecha', lote as 'Lote', ronda as 'Ronda'
+                    FROM vacunas WHERE dni=? ORDER BY fecha DESC
+                """, conn, params=(dni_v,))
                 
                 if not df_c.empty:
                     st.dataframe(df_c, use_container_width=True)
                 else:
-                    st.warning("No hay registros de vacunas para este paciente.")
+                    st.info("No hay vacunas registradas para este DNI.")
+            except Exception as e:
+                st.error(f"Error al leer historial: {e}")
         else:
-            st.error("⚠️ **Acceso Restringido:** El DNI no existe o pertenece a un sector fuera de su supervisión.")
-        conn.close()
-    else:
-        st.info("👋 Ingrese el DNI del paciente para verificar alertas y cargar vacunas.")
+            st.warning("⚠️ El DNI no figura en el censo. Regístrelo primero en el Bloque 1.")
+
+    conn.close()
 # ==========================================
 # BLOQUE 5: NUTRICIÓN (IMC, RONDAS Y EQUIPOS)
 # ==========================================
@@ -1289,6 +1267,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
