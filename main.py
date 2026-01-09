@@ -547,7 +547,7 @@ def bloque_3_vivienda():
 
     conn.close()
 # ==========================================
-# BLOQUE 4: VACUNAS (REPARADO)
+# BLOQUE 4: VACUNAS (CALENDARIO COMPLETO)
 # ==========================================
 def bloque_4_vacunas():
     st.header("💉 Registro de Vacunación")
@@ -556,8 +556,6 @@ def bloque_4_vacunas():
 
     # 1. REPARACIÓN DE TABLA VACUNAS
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-    
-    # Columnas necesarias para el carnet
     cols_vacunas = {
         "vacuna": "TEXT",
         "dosis": "TEXT",
@@ -566,10 +564,8 @@ def bloque_4_vacunas():
         "ronda": "TEXT DEFAULT '1'",
         "registrado_por": "TEXT"
     }
-
     cursor.execute("PRAGMA table_info(vacunas)")
     cols_actuales = [info[1] for info in cursor.fetchall()]
-
     for col, tipo in cols_vacunas.items():
         if col not in cols_actuales:
             try:
@@ -577,27 +573,38 @@ def bloque_4_vacunas():
             except: pass
     conn.commit()
 
-    # 2. SELECCIÓN DE INTEGRANTE
-    dni_v = st.text_input("Ingrese DNI del integrante para ver/cargar vacunas:")
+    # 2. SELECCIÓN DE PACIENTE
+    dni_v = st.text_input("Ingrese DNI del paciente:")
 
     if dni_v:
-        # Buscamos nombre del integrante
         res = cursor.execute("SELECT nombre FROM integrantes WHERE dni = ?", (dni_v,)).fetchone()
         
         if res:
             st.subheader(f"Paciente: {res[0]}")
             
-            # Obtener ronda actual del sistema
             try:
                 r_res = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
                 ronda_sis = r_res[0] if r_res else "1"
             except: ronda_sis = "1"
 
-            # 3. FORMULARIO DE CARGA
+            # 3. FORMULARIO CON CALENDARIO AMPLIADO
             with st.expander("➕ Registrar Nueva Aplicación"):
                 with st.form("form_nueva_vacuna"):
-                    v_nombre = st.selectbox("Vacuna:", ["Sabin", "Quintuple", "Triple Viral", "Antigripal", "Hepatitis B", "Otras"])
-                    v_dosis = st.selectbox("Dosis:", ["1ra", "2da", "3ra", "Refuerzo", "Única"])
+                    # Lista ampliada según Calendario Nacional
+                    v_nombre = st.selectbox("Vacuna:", [
+                        "BCG", "Hepatitis B (Recién Nacido/Adulto)", "Neumococo Conjugada (13v)",
+                        "Quíntuple (Pentavalente)", "IPV (Salk)", "Rotavirus", "Menigoquica (ACW135Y)",
+                        "Gripe (Antigripal)", "Hepatitis A", "Triple Viral (SRP)", "Varicela",
+                        "Triple Bacteriana Celular", "Triple Bacteriana Acelular (dTpa)",
+                        "VPH (Virus Papiloma Humano)", "Doble Bacteriana (dT)", "Fiebre Amarilla",
+                        "Fiebre Hemorrágica Argentina", "Refuerzo Covid-19"
+                    ])
+                    
+                    v_dosis = st.selectbox("Dosis:", [
+                        "Dosis Única", "1ra Dosis", "2da Dosis", "3ra Dosis", 
+                        "Refuerzo", "1er Refuerzo", "2do Refuerzo", "Anual"
+                    ])
+                    
                     v_fecha = st.date_input("Fecha de Aplicación:")
                     v_lote = st.text_input("Lote (Opcional):")
                     
@@ -608,27 +615,23 @@ def bloque_4_vacunas():
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (dni_v, v_nombre, v_dosis, v_fecha.isoformat(), v_lote, ronda_sis, usuario))
                         conn.commit()
-                        st.success(f"✅ Vacuna {v_nombre} registrada.")
+                        st.success(f"✅ Vacuna {v_nombre} registrada exitosamente.")
                         st.rerun()
 
-            # 4. HISTORIAL DE VACUNAS (Carnet Digital)
+            # 4. CARNET DIGITAL
             st.write("### 📜 Carnet de Vacunación")
-            try:
-                # Ahora la consulta NO fallará porque 'ronda' ya existe
-                df_c = pd.read_sql(f"""
-                    SELECT vacuna as 'Vacuna', dosis as 'Dosis', 
-                    fecha as 'Fecha', lote as 'Lote', ronda as 'Ronda'
-                    FROM vacunas WHERE dni=? ORDER BY fecha DESC
-                """, conn, params=(dni_v,))
-                
-                if not df_c.empty:
-                    st.dataframe(df_c, use_container_width=True)
-                else:
-                    st.info("No hay vacunas registradas para este DNI.")
-            except Exception as e:
-                st.error(f"Error al leer historial: {e}")
+            df_c = pd.read_sql("""
+                SELECT vacuna as 'Vacuna', dosis as 'Dosis', 
+                fecha as 'Fecha', lote as 'Lote', ronda as 'Ronda'
+                FROM vacunas WHERE dni=? ORDER BY fecha DESC
+            """, conn, params=(dni_v,))
+            
+            if not df_c.empty:
+                st.dataframe(df_c, use_container_width=True)
+            else:
+                st.info("No hay vacunas registradas para este paciente.")
         else:
-            st.warning("⚠️ El DNI no figura en el censo. Regístrelo primero en el Bloque 1.")
+            st.warning("⚠️ El DNI no figura en el censo.")
 
     conn.close()
 # ==========================================
@@ -1267,6 +1270,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
