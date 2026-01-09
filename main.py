@@ -1655,31 +1655,24 @@ def bloque_11_vigilancia_epidemiologica():
 # NAVEGACIÓN PRINCIPAL ACTUALIZADA (ORÁN 2026)
 # ==========================================
 def main():
-    # Menú de Navegación con los nuevos bloques incluidos
+    # 1. Definir las opciones (esto crea el texto de la barra lateral)
     opciones = [
-        "🏠 Panel de Control", 
-        "📝 1. Censo", 
-        "🤰 2. Materno", 
-        "🏠 3. Vivienda", 
-        "💉 4. Vacunas", 
-        "⚖️ 5. Nutrición", 
-        "💊 6. TBC", 
-        "📊 7. Estadísticas", 
-        "🗺️ 8. Mapas", 
-        "⚙️ 9. Admin",
-        "🛠️ 10. Gestión Avanzada",
-        "🚨 11. Vigilancia Alertas"
+        "🏠 Panel de Control", "📝 1. Censo", "🤰 2. Materno", 
+        "🏠 3. Vivienda", "💉 4. Vacunas", "⚖️ 5. Nutrición", 
+        "💊 6. TBC", "📊 7. Estadísticas", "🗺️ 8. Mapas", "⚙️ 9. Admin",
+        "🛠️ 10. Gestión Avanzada", "🚨 11. Vigilancia Alertas"
     ]
 
-    # Barra lateral
+    # 2. Crear la barra lateral (SI FALTA ESTO, NO APARECE EL MENÚ)
     st.sidebar.title("Navegación APS")
     menu = st.sidebar.selectbox("Seleccione un Bloque:", opciones)
 
-    # Lógica de redirección (Asegúrate de que los nombres coincidan exactamente)
+    # 3. Lógica para mostrar cada bloque
     if menu == "🏠 Panel de Control":
         bloque_0_dashboard()
     elif menu == "📝 1. Censo":
-        bloque_1_vivienda() # O el nombre que uses para censo
+        # Aquí va el nombre de tu función para el censo
+        bloque_1_censo() 
     elif menu == "🤰 2. Materno":
         bloque_2_embarazo()
     elif menu == "🏠 3. Vivienda":
@@ -1704,6 +1697,7 @@ def main():
 # Ejecución de la app (Esto debe estar al final de todo, pegado al margen izquierdo)
 if __name__ == "__main__":
     main()
+
 
 
 
