@@ -24,8 +24,6 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-from database import inicializar_db, obtener_conexion # Aquí traes lo que creamos en el otro archivo
 
 # Al inicio de la función main, llamas a la inicialización
 def main():
@@ -982,5 +980,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
