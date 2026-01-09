@@ -131,95 +131,77 @@ def obtener_ronda_info():
     return ronda_manual, ronda_sugerida
 
 # ==========================================
-# BLOQUE 0: DASHBOARD OPERATIVO (ANTIFALLOS)
+# BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
 # ==========================================
 def bloque_0_dashboard():
-    nombre_real = st.session_state.get('nombre_agente', 'Agente')
-    usuario_id = st.session_state.get('usuario_logueado', 'admin')
-    
-    st.title(f"👋 Bienvenido/a, {nombre_real}")
-    st.caption(f"Gestión de Sector: {usuario_id} | Fecha: {date.today().strftime('%d/%m/%Y')}")
+    st.title("🏥 Panel de Control APS - Orán")
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
 
-    conn = obtener_conexion()
-    
-    # --- FUNCIÓN INTERNA PARA VALIDAR TABLAS ---
-    def tabla_existe(nombre_tabla):
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
-        return cursor.fetchone()[0] == 1
-
-    st.subheader("🚨 Prioridades de Visita en Pantalla Principal")
-    
+    # 1. MÉTRICAS RÁPIDAS (Top Cards)
+    c1, c2, c3 = st.columns(3)
     try:
-        alertas = []
-
-        # 1. Validar TBC
-        if tabla_existe('tbc'):
-            tbc_df = pd.read_sql("SELECT dni, '🔴 TBC Activo' as motivo FROM tbc WHERE estado='Activo' AND registrado_por=?", 
-                                 conn, params=(usuario_id,))
-            alertas.append(tbc_df)
-
-        # 2. Validar Embarazo
-        if tabla_existe('controles_embarazo'):
-            emb_df = pd.read_sql("SELECT dni, '🟣 Control Materno' as motivo FROM controles_embarazo WHERE registrado_por=?", 
-                                 conn, params=(usuario_id,))
-            alertas.append(emb_df)
-
-        # 3. Validar Nutrición (Bajo Peso)
-        if tabla_existe('crecimiento'):
-            nut_df = pd.read_sql("SELECT dni, '🟠 Bajo Peso' as motivo FROM crecimiento WHERE imc < 18.5 AND registrado_por=?", 
-                                 conn, params=(usuario_id,))
-            alertas.append(nut_df)
-
-        # 4. Validar Vacunas Incompletas (Tu requerimiento especial)
-        if tabla_existe('vacunas'):
-            vac_df = pd.read_sql("SELECT dni, '💉 Vacuna Pendiente' as motivo FROM vacunas WHERE estado='Incompleto' AND registrado_por=?", 
-                                 conn, params=(usuario_id,))
-            alertas.append(vac_df)
-
-        # --- MOSTRAR RESULTADOS ---
-        if alertas:
-            # Combinamos todas las alertas encontradas
-            df_total = pd.concat(alertas, ignore_index=True).drop_duplicates('dni')
-            
-            if not df_total.empty:
-                # Buscamos los nombres de estas personas en la tabla integrantes
-                dnis_alerta = tuple(df_total['dni'].tolist())
-                if len(dnis_alerta) == 1: dnis_query = f"('{dnis_alerta[0]}')"
-                else: dnis_query = str(dnis_alerta)
-                
-                nombres_df = pd.read_sql(f"SELECT dni, nombre FROM integrantes WHERE dni IN {dnis_query}", conn)
-                df_final = pd.merge(df_total, nombres_df, on='dni')
-
-                # Renderizado de Tarjetas
-                cols = st.columns(2)
-                for i, row in df_final.iterrows():
-                    with cols[i % 2]:
-                        st.error(f"**{row['motivo']}** \n👤 {row['nombre']} (DNI: {row['dni']})")
-            else:
-                st.success("✅ No hay visitas críticas pendientes en las tablas actuales.")
-        else:
-            st.info("ℹ️ Todavía no hay datos de salud registrados para generar alertas.")
-
-    except Exception as e:
-        st.warning("El sistema está sincronizando las tablas de salud. Registre un paciente para activar las alertas.")
-        # Opcional para debugear: st.write(e)
-    finally:
-        conn.close()
+        total_personas = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        total_casas = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+        ronda_v, _ = obtener_ronda_info() # Función que ya tenemos
+        
+        c1.metric("Población Censada", f"{total_personas} pers.")
+        c2.metric("Viviendas Relevadas", f"{total_casas}")
+        c3.metric("Ronda Actual", f"N° {ronda_v}")
+    except:
+        st.info("Iniciando sistema... Realice su primera carga para ver métricas.")
 
     st.divider()
-    
-    # --- MÉTRICAS DE RESUMEN ---
-    st.subheader("📊 Resumen del Estado del Sector")
-    c1, c2, c3 = st.columns(3)
-    # Aquí puedes poner conteos simples de integrantes registrados
-    conn = obtener_conexion()
-    total_pob = pd.read_sql("SELECT count(*) as total FROM integrantes WHERE registrado_por=?", conn, params=(usuario_id,))['total'][0]
+
+    # 2. SECCIÓN DE ALERTAS CRÍTICAS
+    col_alerta1, col_alerta2 = st.columns(2)
+
+    with col_alerta1:
+        st.subheader("🚩 Viviendas en Riesgo")
+        # Buscamos casas con prioridad Alta o CRÍTICA
+        try:
+            query_riesgo = """
+                SELECT nro_casa, prioridad, registrado_por 
+                FROM viviendas 
+                WHERE prioridad IN ('Alta', 'CRÍTICA')
+                ORDER BY prioridad DESC
+            """
+            df_riesgo = pd.read_sql(query_riesgo, conn)
+
+            if not df_riesgo.empty:
+                for _, row in df_riesgo.iterrows():
+                    color = "red" if row['prioridad'] == 'CRÍTICA' else "orange"
+                    st.error(f"**Casa {row['nro_casa']}** - Prioridad: {row['prioridad']} (Agente: {row['registrado_por']})")
+            else:
+                st.success("✅ No hay viviendas con riesgo crítico detectado.")
+        except:
+            st.info("Sin datos de viviendas aún.")
+
+    with col_alerta2:
+        st.subheader("👶 Alerta de Vacunación Infantil")
+        # Buscamos niños menores de 5 años sin vacunas registradas en la ronda actual
+        try:
+            # Calculamos fecha de corte para menores de 5 años
+            fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
+            
+            query_vacunas = f"""
+                SELECT i.dni, i.nombre, i.nro_casa
+                FROM integrantes i
+                LEFT JOIN vacunas v ON i.dni = v.dni
+                WHERE i.f_nac > '{fecha_limite}' 
+                AND v.dni IS NULL
+            """
+            df_niños_sin_v = pd.read_sql(query_vacunas, conn)
+
+            if not df_niños_sin_v.empty:
+                st.warning(f"Hay {len(df_niños_sin_v)} niños menores de 5 años sin vacunas cargadas.")
+                st.dataframe(df_niños_sin_v[['nro_casa', 'nombre']], use_container_width=True)
+            else:
+                st.success("✅ Todos los niños censados tienen vacunas al día.")
+        except:
+            st.info("Sin datos de vacunas aún.")
+
     conn.close()
-    
-    c1.metric("Población a Cargo", total_pob)
-    c2.metric("Ronda Actual", "1 (2026)")
-    c3.metric("Estado", "Activo")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1270,6 +1252,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
