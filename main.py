@@ -354,65 +354,42 @@ def bloque_0_dashboard():
     from datetime import date, timedelta
 
     st.title("🏥 Panel de Control APS - Orán")
-
-    # 1. CONEXIÓN DIRECTA Y SEGURA
-    db_path = 'aps_oran_final.db'
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    # Aseguramos que existan las tablas (si no, las métricas dan error)
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    conn.commit()
-
-    # 2. OBTENER DATOS (Con manejo de errores para que no quede en blanco)
-    try:
-        total_p = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-    except: total_p = 0
-
-    try:
-        total_v = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-    except: total_v = 0
-
-    try:
-        res_r = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
-        ronda_n = res_r[0] if res_r else "1"
-    except: ronda_n = "1"
-
-    # 3. DIBUJAR LAS MÉTRICAS (AQUÍ ES DONDE SE VEÍAN BLANCAS)
-    # Usamos contenedores para forzar la visualización
-    with st.container():
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Población", f"{total_p} pers.")
-        c2.metric("Viviendas", f"{total_v} casas")
-        c3.metric("Ronda", f"N° {ronda_n}")
-
-    st.divider()
-
-    # 4. ALERTA DE VACUNACIÓN (Instrucción 07/01/2026)
-    st.subheader("👶 Alerta de Vacunación Infantil")
-    fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
     
-    try:
-        # Buscamos niños menores de 5 años que no estén en la tabla de vacunas
-        q = f"""
-            SELECT nombre, nro_casa 
-            FROM integrantes 
-            WHERE f_nac > '{fecha_corte}' 
-            AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-        """
-        df_v = pd.read_sql(q, conn)
-        
-        if not df_v.empty:
-            st.warning(f"Se detectaron {len(df_v)} niños con vacunas pendientes.")
-            st.dataframe(df_v, use_container_width=True)
-        else:
-            st.success("✅ Todos los menores de 5 años tienen sus vacunas al día.")
-    except:
-        st.info("No hay datos de vacunas registrados para analizar.")
+    # Creamos un contenedor vacío para las métricas
+    dashboard_placeholder = st.empty()
 
-    conn.close()
+    with dashboard_placeholder.container():
+        try:
+            conn = sqlite3.connect('aps_oran_final.db')
+            
+            # Consultas rápidas
+            p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+            v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+            
+            # Mostramos métricas con fondo de color usando st.info/warning si st.metric falla
+            c1, c2, c3 = st.columns(3)
+            c1.metric("👥 Población", f"{p} personas")
+            c2.metric("🏠 Viviendas", f"{v} casas")
+            c3.metric("📅 Fecha", date.today().strftime("%d/%m/%Y"))
+            
+            st.divider()
+
+            # SECCIÓN DE ALERTAS (Requisito 07/01/2026)
+            st.subheader("🚨 Alertas Sanitarias")
+            
+            # Alerta de Niños sin vacunas
+            fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
+            df_v = pd.read_sql(f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{fecha_corte}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)", conn)
+            
+            if not df_v.empty:
+                st.error(f"⚠️ Se detectaron {len(df_v)} niños con esquemas incompletos.")
+                st.dataframe(df_v, use_container_width=True)
+            else:
+                st.success("✅ Cobertura de vacunación completa.")
+
+            conn.close()
+        except Exception as e:
+            st.error(f"Error técnico en el Dashboard: {e}")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1858,6 +1835,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
