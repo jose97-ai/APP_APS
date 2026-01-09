@@ -4,154 +4,95 @@ import sqlite3
 import hashlib
 from datetime import datetime, date, timedelta
 
-# --- 1. CONFIGURACIÓN INICIAL ---
-if 'config_ok' not in st.session_state:
+# --- 1. CONFIGURACIÓN ÚNICA ---
+# Evita que se ejecute la configuración más de una vez
+if 'config_lista' not in st.session_state:
     st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
-    st.session_state.config_ok = True
+    st.session_state.config_lista = True
 
-# --- 2. FUNCIÓN DE BASE DE DATOS (UNIFICADA) ---
-def inicializar_db():
-    """Crea y repara tablas para evitar el NameError"""
+# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN ---
+def conectar_y_reparar():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # Crear tablas
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    # Crear tablas base
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-    
-    # Reparar columnas para el Inicio (09/01/2026)
-    def reparar(tabla, col, tipo):
-        cursor.execute(f"PRAGMA table_info({tabla})")
-        existentes = [info[1] for info in cursor.fetchall()]
-        if col not in existentes:
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
 
-    for c in ["nombre", "f_nac", "nro_casa", "ronda"]:
-        reparar("integrantes", c, "TEXT")
-    for c in ["prioridad", "registrado_por"]:
-        reparar("viviendas", c, "TEXT")
+    # Función para agregar columnas faltantes sin borrar datos
+    def agregar_col(tabla, columna, tipo):
+        cursor.execute(f"PRAGMA table_info({tabla})")
+        columnas = [info[1] for info in cursor.fetchall()]
+        if columna not in columnas:
+            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+
+    # Reparar Integrantes (Asegurar campos del censo)
+    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
+        agregar_col("integrantes", c, "TEXT")
+    
+    # Reparar Viviendas
+    for c in ["prioridad", "registrado_por", "fecha_visita"]:
+        agregar_col("viviendas", c, "TEXT")
+
+    # Insertar Admin y Ronda inicial
+    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
+    cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)", 
+                  ('admin', 'Admin Orán', 'Administrador', admin_pass))
+    cursor.execute("INSERT OR IGNORE INTO config (clave, valor) VALUES (?,?)", ('ronda_actual', '1'))
 
     conn.commit()
     return conn
 
-# --- 3. PANTALLA DE INICIO (Con Alertas de Vacunación) ---
-def bloque_0_inicio():
-    st.title("🏥 Sistema APS Orán - Inicio")
-    conn = inicializar_db()
+# --- 3. BLOQUE 0: DASHBOARD (PANEL DE CONTROL) ---
+def bloque_0_dashboard():
+    st.title("🏠 Panel de Control APS - Orán")
+    conn = conectar_y_reparar()
     
     try:
         # Métricas principales
-        p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+        res_p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        res_v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Población Registrada", f"{p} pers.")
-        c2.metric("Viviendas Visitadas", v)
-        c3.metric("Fecha Actual", date.today().strftime("%d/%m/%Y"))
+        c1.metric("Población Censada", f"{res_p} pers.")
+        c2.metric("Viviendas Relevadas", f"{res_v}")
+        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
 
         st.divider()
 
-        # ALERTAS DEL 07/01/2026
+        # Alertas (Requisito 07/01/2026)
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("🚩 Riesgo Habitacional")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            if not df_r.empty: st.error(f"{len(df_r)} casas en riesgo"); st.table(df_r)
-            else: st.success("✅ Sin riesgos críticos.")
+            if not df_r.empty: st.error(f"Hay {len(df_r)} casas críticas"); st.table(df_r)
+            else: st.success("Sin riesgos críticos.")
 
         with col2:
-            st.subheader("👶 Alerta Vacunación (<5 años)")
-            limite = (date.today() - timedelta(days=5*365)).isoformat()
-            # Esta consulta busca niños que no están en la tabla de vacunas
-            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
+            st.subheader("👶 Vacunación (<5 años)")
+            corte = (date.today() - timedelta(days=5*365)).isoformat()
+            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{corte}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
             df_v = pd.read_sql(query, conn)
-            if not df_v.empty: st.warning(f"{len(df_v)} niños con vacunas pendientes"); st.dataframe(df_v)
-            else: st.success("✅ Vacunación al día.")
+            if not df_v.empty: st.warning(f"{len(df_v)} niños pendientes"); st.dataframe(df_v)
+            else: st.success("Vacunación completa.")
     finally:
         conn.close()
 
-# --- 4. CONTROL DE NAVEGACIÓN (MAIN) ---
-def conectar_y_reparar():
-    return sqlite3.connect('aps_oran_final.db')
+# --- 4. FUNCIÓN PRINCIPAL DE ARRANQUE ---
 def main():
-    inicializar_db()  # Asegura que las tablas y las alertas del 07/01 existan
+    conectar_y_reparar() # Esto asegura las tablas una sola vez
     
-    st.sidebar.title("🏥 APS Orán 2026")
+    st.sidebar.title("Menú Principal")
+    opcion = st.sidebar.selectbox("Seleccione Módulo:", ["🏠 Dashboard", "📝 Bloque 1: Censo"])
     
-    opciones = [
-        "🏠 Dashboard", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
-        "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
-        "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
-        "🚨 11. Vigilancia Epidemiológica"
-    ]
-    
-    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones)
-
-    # --- CONEXIÓN DE LOS BLOQUES ---
-    if seleccion == "🏠 Inicio":
-        bloque_0_inicio() # Muestra alertas de niños y claves
-
-    elif seleccion == "📝 1. Censo":
-        if 'bloque_1_censo' in globals(): bloque_1_censo()
-        elif 'censo' in globals(): censo()
-        else: st.error("No se encontró la función de Censo")
-
-    elif seleccion == "🤰 2. Embarazadas":
-        if 'bloque_2_materno' in globals(): bloque_2_materno()
-        elif 'embarazadas' in globals(): embarazadas()
-        else: st.error("No se encontró la función de Embarazadas")
-
-    elif seleccion == "🏠 3. Viviendas":
-        # Intentamos varios nombres para que aparezca tu contenido
-        if 'bloque_3_viviendas' in globals(): bloque_3_viviendas()
-        elif 'viviendas' in globals(): viviendas()
-        elif 'formulario_viviendas' in globals(): formulario_viviendas()
-        else: st.warning("Sección Viviendas: No encontré la función. Revisa cómo la nombraste (ej: def viviendas():)")
-
-    elif seleccion == "💉 4. Vacunación":
-        if 'bloque_4_vacunas' in globals(): bloque_4_vacunas()
-        elif 'vacunacion' in globals(): vacunacion()
-
-    elif seleccion == "🍎 5. Nutrición":
-        if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
-        elif 'nutricion' in globals(): nutricion()
-        elif 'bloque_5_nutricion' in globals(): bloque_5_nutricion()
-        else: st.warning("Sección Nutrición: Revisa el nombre de la función.")
-
-    elif seleccion == "🦠 6. TBC":
-        if 'bloque_5_tbc' in globals(): bloque_5_tbc()
-        elif 'bloque_6_tbc' in globals(): bloque_6_tbc()
-        elif 'tbc' in globals(): tbc()
-        else: st.warning("Sección TBC: Revisa el nombre de la función.")
-
-    elif seleccion == "📊 7. Estadísticas":
-        if 'bloque_10_stats' in globals(): bloque_10_stats()
-        elif 'bloque_7_stats' in globals(): bloque_7_stats()
-        elif 'estadisticas' in globals(): estadisticas()
-
-    elif seleccion == "👥 8. Seguimiento Agentes":
-        if 'bloque_8_seguimiento' in globals(): bloque_8_seguimiento()
-        elif 'seguimiento' in globals(): seguimiento()
-
-    elif seleccion == "⚙️ 9. Admin":
-        bloque_9_admin()
-
-    elif seleccion == "🚀 10. Gestión Avanzada":
-        if 'bloque_10_gestion_avanzada' in globals():
-            bloque_10_gestion_avanzada()
-        else:
-            st.error("Error de conexión: Verifica que 'def bloque_10_gestion_avanzada():' esté bien escrito arriba.")
-
-    elif seleccion == "🚨 11. Vigilancia Epidemiológica":
-        if 'bloque_11_vigilancia_epidemiologica' in globals():
-            bloque_11_vigilancia_epidemiologica()
-        else:
-            st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
-
-if __name__ == "__main__":
-    main()
+    if opcion == "🏠 Dashboard":
+        bloque_0_dashboard()
+    elif opcion == "📝 Bloque 1: Censo":
+        st.write("---") 
+        # Aquí sigue tu código original del Bloque 1
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1593,6 +1534,9 @@ def main():
             bloque_11_vigilancia_epidemiologica()
         else:
             st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
+if __name__ == "__main__":
+    main()
+
 
 
 
