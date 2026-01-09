@@ -221,108 +221,96 @@ def bloque_0_dashboard():
     c2.metric("Ronda Actual", "1 (2026)")
     c3.metric("Estado", "Activo")
 # ==========================================
-# BLOQUE 1: CENSO (ACTUALIZADO CON RONDA)
+# BLOQUE 1: CENSO (CÓDIGO COMPLETO)
 # ==========================================
 def bloque_1_censo():
-    # 1. Conexión inicial para reparaciones y datos
+    # 1. CONEXIÓN Y REPARACIÓN AUTOMÁTICA DE TABLAS
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # --- REPARACIÓN DE SEGURIDAD (PONER AQUÍ) ---
-    cursor.execute("PRAGMA table_info(integrantes)")
-    columnas = [info[1] for info in cursor.fetchall()]
-    
-    if "ronda" not in columnas:
-        try:
-            cursor.execute("ALTER TABLE integrantes ADD COLUMN ronda TEXT DEFAULT '1'")
-            conn.commit()
-        except: pass
-
-    if "registrado_por" not in columnas:
-        try:
-            cursor.execute("ALTER TABLE integrantes ADD COLUMN registrado_por TEXT")
-            conn.commit()
-        except: pass
-    
-    # --- PESTAÑA 1: REGISTRO ---
-    with tab1:
-        with st.form("f_censo_completo", clear_on_submit=True):
-            st.subheader("📍 Identificación y Ubicación")
-            col_id1, col_id2, col_id3 = st.columns(3)
-            n_aps = col_id1.text_input("N° APS / Casa")
-            fam = col_id2.text_input("Apellido Familia")
-            dni = col_id3.text_input("DNI (Sin puntos)")
-            nom = st.text_input("Nombre y Apellido Completo")
-
-            col_p1, col_p2, col_p3 = st.columns(3)
-            hoy = date.today()
-            f_nac_obj = col_p1.date_input("Fecha de Nacimiento", value=date(2000, 1, 1), max_value=hoy)
-            sexo = col_p2.selectbox("Sexo", ["Masculino", "Femenino"])
-            obra_social = col_p3.selectbox("Obra Social", ["Ninguna", "PAMI", "IPS", "Otras"])
-
-            st.divider()
-            st.subheader("🎓 Educación y GPS")
-            col_ed1, col_ed2 = st.columns(2)
-            nivel_ed = col_ed1.selectbox("Nivel Educativo", ["Ninguno", "Primario", "Secundario", "Terciario", "Universitario"])
-            estado_ed = col_ed2.radio("Estado del Nivel", ["Completo", "Incompleto"], horizontal=True)
-
-            col_gps1, col_gps2 = st.columns(2)
-            lat = col_gps1.number_input("Latitud (GPS)", format="%.6f", value=-23.1325)
-            lon = col_gps2.number_input("Longitud (GPS)", format="%.6f", value=-64.3271)
-
-            if st.form_submit_button("💾 Guardar Integrante"):
-                if dni and nom and n_aps:
-                    fecha_db = f_nac_obj.strftime('%Y-%m-%d')
-                    sexo_db = "M" if sexo == "Masculino" else "F"
-                    
-                    conn = obtener_conexion()
-                    try:
-                        # Se agregó 'ronda' a la inserción
-                        conn.execute("""INSERT OR REPLACE INTO integrantes 
-                            (dni, nro_aps, familia, nombre, f_nac, sexo, nivel_ed, estado_ed, 
-                             latitud, longitud, obra_social, fecha_registro, registrado_por, ronda) 
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                            (dni, n_aps, fam, nom, fecha_db, sexo_db, nivel_ed, estado_ed, 
-                             lat, lon, obra_social, str(hoy), usuario_actual, ronda_actual_valor))
-                        conn.commit()
-                        st.success(f"✅ {nom} guardado en Ronda {ronda_actual_valor}.")
-                    except sqlite3.OperationalError:
-                        # Si la columna ronda no existe, la creamos
-                        conn.execute("ALTER TABLE integrantes ADD COLUMN ronda TEXT")
-                        conn.commit()
-                        st.info("Actualizando base de datos... Reintente el guardado.")
-                    finally:
-                        conn.close()
-                else:
-                    st.error("⚠️ Complete todos los campos.")
-
-    # --- PESTAÑA 2: BÚSQUEDA (FILTRADO POR USUARIO) ---
-    with tab2:
-        st.subheader("🏠 Mis Cargas en Ronda Actual")
-        busqueda_aps = st.text_input("Ingrese N° de Casa", key="busqueda_aps_input")
+    try:
+        # Verificamos qué columnas existen para evitar el error de "ya existe"
+        cursor.execute("PRAGMA table_info(integrantes)")
+        columnas = [info[1] for info in cursor.fetchall()]
         
-        if busqueda_aps:
-            conn = obtener_conexion()
-            # Ahora mostramos los datos cargados en la ronda vigente por este agente
-            query = """SELECT dni, nombre, f_nac FROM integrantes 
-                       WHERE nro_aps = ? AND registrado_por = ? AND ronda = ?"""
-            df_familia = pd.read_sql(query, conn, params=(busqueda_aps, usuario_actual, ronda_actual_valor))
+        if "ronda" not in columnas:
+            cursor.execute("ALTER TABLE integrantes ADD COLUMN ronda TEXT DEFAULT '1'")
+        if "registrado_por" not in columnas:
+            cursor.execute("ALTER TABLE integrantes ADD COLUMN registrado_por TEXT")
+        if "sexo" not in columnas:
+            cursor.execute("ALTER TABLE integrantes ADD COLUMN sexo TEXT")
+        conn.commit()
+    except Exception as e:
+        pass # Si ya existen, ignoramos el error y seguimos
+
+    # 2. OBTENER INFORMACIÓN DE SESIÓN Y CONFIGURACIÓN
+    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
+    
+    # Intentamos obtener la ronda configurada en el Bloque 9
+    try:
+        res_r = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        ronda_activa = res_r[0] if res_r else "1"
+    except:
+        ronda_activa = "1"
+
+    # 3. INTERFAZ VISUAL
+    st.header(f"📋 Censo - Ronda N° {ronda_activa}")
+    st.caption(f"Agente Responsable: {usuario_actual}")
+    
+    # Definición de pestañas (esto evita el NameError)
+    tab1, tab2 = st.tabs(["📝 Registrar Integrante", "🔍 Gestión de Mis Cargas"])
+
+    with tab1:
+        st.subheader("Datos Personales")
+        with st.form("form_censo"):
+            col1, col2 = st.columns(2)
+            with col1:
+                dni = st.text_input("DNI (Sin puntos):")
+                nombre = st.text_input("Nombre y Apellido Completo:")
+                f_nac = st.date_input("Fecha de Nacimiento:", min_value=date(1920, 1, 1))
             
-            if not df_familia.empty:
-                for index, row in df_familia.iterrows():
-                    c_inf, c_del = st.columns([4, 1])
-                    faltantes = chequear_vacunas_faltantes(row['dni'])
-                    alerta = f" | ⚠️ **Vacunas:** {', '.join(faltantes)}" if faltantes else " | ✅ Al día"
-                    
-                    c_inf.write(f"🔹 **{row['nombre']}** (DNI: {row['dni']}){alerta}")
-                    
-                    if c_del.button(f"🗑️", key=f"del_{row['dni']}"):
-                        conn.execute("DELETE FROM integrantes WHERE dni = ?", (row['dni'],))
+            with col2:
+                sexo = st.selectbox("Sexo:", ["Masculino", "Femenino", "Otro"])
+                parentesco = st.selectbox("Parentesco con Jefe de Hogar:", ["Jefe/a", "Esposo/a", "Hijo/a", "Otro"])
+                # Ubicación aproximada (puedes añadir campos de Lat/Lon si los usas)
+                lat = st.number_input("Latitud (Opcional):", format="%.6f", value=-23.13)
+                lon = st.number_input("Longitud (Opcional):", format="%.6f", value=-64.32)
+
+            # BOTÓN DE GUARDAR
+            enviado = st.form_submit_button("Guardar Integrante")
+            
+            if enviado:
+                if dni and nombre:
+                    try:
+                        cursor.execute("""
+                            INSERT INTO integrantes (dni, nombre, f_nac, sexo, registrado_por, ronda, latitud, longitud)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (dni, nombre, f_nac.isoformat(), sexo, usuario_actual, ronda_activa, lat, lon))
                         conn.commit()
-                        st.rerun()
+                        st.success(f"✅ {nombre} registrado correctamente en la Ronda {ronda_activa}")
+                    except sqlite3.IntegrityError:
+                        st.error("❌ Error: Este DNI ya se encuentra registrado.")
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar: {e}")
+                else:
+                    st.warning("⚠️ El DNI y el Nombre son campos obligatorios.")
+
+    with tab2:
+        st.subheader("Mis Cargas en la Ronda Actual")
+        try:
+            # Consultamos solo lo que cargó el usuario actual en la ronda actual
+            query = "SELECT dni, nombre, f_nac, sexo FROM integrantes WHERE registrado_por = ? AND ronda = ?"
+            df_mis_datos = pd.read_sql(query, conn, params=(usuario_actual, ronda_activa))
+            
+            if not df_mis_datos.empty:
+                st.dataframe(df_mis_datos, use_container_width=True)
+                st.info(f"Has registrado {len(df_mis_datos)} personas en esta ronda.")
             else:
-                st.info(f"No hay registros tuyos en esta casa para la Ronda {ronda_actual_valor}.")
-            conn.close()
+                st.write("Aún no has realizado cargas en esta ronda.")
+        except:
+            st.write("No se pudo cargar la lista de registros.")
+
+    conn.close()
 # ==========================================
 # BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS (ACTUALIZADO)
 # ==========================================
@@ -1262,6 +1250,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
