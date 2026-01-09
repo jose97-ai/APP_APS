@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#2E7D32"          # Verde Salud (Botones y destacados)
+backgroundColor = "#F5F5F5"       # Gris muy claro (Fondo de la app)
+secondaryBackgroundColor = "#E8F5E9" # Verde muy pálido (Barras laterales)
+textColor = "#1B5E20"             # Verde oscuro (Textos)
+font = "sans serif"
