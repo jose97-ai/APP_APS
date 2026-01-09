@@ -5,7 +5,7 @@ import hashlib
 import plotly.express as px
 from datetime import datetime, date, timedelta
 
-# 1. CONFIGURACIÓN (Debe ser la primera línea ejecutable)
+# 1. CONFIGURACIÓN ÚNICA
 st.set_page_config(
     page_title="APS Orán 2026",
     page_icon="🏥",
@@ -17,379 +17,119 @@ st.set_page_config(
 st.markdown("""
     <style>
     .main { background-color: #F5F5F5; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .stButton>button { border-radius: 20px; border: 1px solid #2E7D32; }
+    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #2E7D32; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. MOTOR DE BASE DE DATOS (Corregido para evitar NameError)
+# 3. MOTOR DE BASE DE DATOS UNIFICADO
 def obtener_conexion():
     return sqlite3.connect('aps_oran_final.db')
 
 def inicializar_db():
-    """Crea y repara la base de datos automáticamente"""
     conn = obtener_conexion()
     cursor = conn.cursor()
-    
-    # Crear tablas esenciales
+    # Tablas con todas las columnas necesarias para el Dashboard
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, nombre TEXT, rol TEXT, password TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-
-    # Función de reparación para no perder datos existentes
-    def agregar_columna(tabla, columna, tipo):
-        cursor.execute(f"PRAGMA table_info({tabla})")
-        existentes = [info[1] for info in cursor.fetchall()]
-        if columna not in existentes:
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
-
-    # Asegurar columnas mínimas para el funcionamiento
-    for c in ["nombre", "f_nac", "nro_casa", "ronda", "registrado_por"]:
-        agregar_columna("integrantes", c, "TEXT")
-    for c in ["prioridad", "tenencia"]:
-        agregar_columna("viviendas", c, "TEXT")
-    for c in ["vacuna", "dosis", "fecha"]:
-        agregar_columna("vacunas", c, "TEXT")
-
-    # Usuario admin por defecto (Clave: oran2026)
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT, registrado_por TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    
+    # Insertar Admin por defecto
     admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
     cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) VALUES (?,?,?,?)", 
                   ('admin', 'Admin Orán', 'Administrador', admin_pass))
     
+    # Ronda inicial
+    cursor.execute("INSERT OR IGNORE INTO config (clave, valor) VALUES ('ronda_actual', '1')")
+    
     conn.commit()
     conn.close()
 
-def hash_password(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-# 4. DASHBOARD CON ALERTAS (Actualizado 07/01/2026)
-def bloque_0_dashboard():
-    st.title("🏠 Panel de Gestión APS - Orán")
-    conn = obtener_conexion()
-    
+# 4. FUNCIONES DE SOPORTE
+def obtener_ronda_info():
     try:
-        # Cálculos de métricas
-        total_p = pd.read_sql("SELECT COUNT(*) as c FROM integrantes", conn).iloc[0]['c']
-        total_v = pd.read_sql("SELECT COUNT(*) as c FROM viviendas", conn).iloc[0]['c']
-        
-        # ALERTA NIÑOS < 5 AÑOS SIN VACUNAS
-        fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-        query_alerta = f"""
-            SELECT nombre, nro_casa, f_nac FROM integrantes 
-            WHERE f_nac > '{fecha_limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
-        """
-        df_alertas = pd.read_sql(query_alerta, conn)
+        conn = obtener_conexion()
+        res = conn.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        conn.close()
+        return (res[0] if res else "1", "Activa")
+    except: return ("1", "Activa")
 
+# 5. BLOQUE 0: DASHBOARD (Versión Definitiva)
+def bloque_0_dashboard():
+    st.title("🏥 Panel de Control APS - Orán")
+    
+    # Botón de emergencia para ver si funciona (solo si está todo en 0)
+    if st.sidebar.button("🧪 Cargar Datos de Prueba"):
+        conn = obtener_conexion()
+        conn.execute("INSERT OR IGNORE INTO integrantes VALUES ('1', 'Juan Pérez', '2024-05-10', 'Casa 1', '1', 'Agente 1')")
+        conn.execute("INSERT OR IGNORE INTO viviendas VALUES ('Casa 1', 'Alta', 'Agente 1')")
+        conn.commit()
+        conn.close()
+        st.rerun()
+
+    conn = obtener_conexion()
+    try:
+        # Métricas
+        p = pd.read_sql("SELECT COUNT(*) as c FROM integrantes", conn).iloc[0]['c']
+        v = pd.read_sql("SELECT COUNT(*) as c FROM viviendas", conn).iloc[0]['c']
+        r, _ = obtener_ronda_info()
+
+        # Recuadros (Métricas)
         c1, c2, c3 = st.columns(3)
-        c1.metric("Población Registrada", f"{total_p} pers.")
-        c2.metric("Viviendas Visitadas", total_v)
-        c3.metric("Alertas Vacunación", len(df_alertas), delta="Pendientes", delta_color="inverse")
+        c1.metric("👥 Población Censada", f"{p} pers.")
+        c2.metric("🏠 Viviendas Relevadas", f"{v} casas")
+        c3.metric("📅 Ronda Actual", f"N° {r}")
 
         st.divider()
-        if not df_alertas.empty:
-            st.error("### 👶 Alerta: Niños menores de 5 años sin vacunas registradas")
-            st.dataframe(df_alertas, use_container_width=True)
-        else:
-            st.success("✅ No hay alertas de vacunación infantil pendientes.")
-            
+
+        # Alertas (Pedido 07/01/2026)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🚩 Riesgo Habitacional")
+            df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
+            if not df_r.empty:
+                st.error(f"Hay {len(df_r)} viviendas en riesgo.")
+                st.table(df_r)
+            else: st.success("Sin riesgos críticos.")
+
+        with col2:
+            st.subheader("👶 Alerta de Vacunación")
+            fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
+            # Esta query busca niños que NO están en la tabla vacunas
+            q_v = f"""
+                SELECT nombre, nro_casa FROM integrantes 
+                WHERE f_nac > '{fecha_corte}' 
+                AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)
+            """
+            df_v = pd.read_sql(q_v, conn)
+            if not df_v.empty:
+                st.warning(f"⚠️ {len(df_v)} niños con vacunas pendientes")
+                st.dataframe(df_v)
+            else: st.success("Esquemas completos.")
+
     except Exception as e:
-        st.error(f"Error en Dashboard: {e}")
+        st.error(f"Error cargando datos: {e}")
     finally:
         conn.close()
 
-# 5. ADMINISTRACIÓN Y SEGURIDAD
+# 6. BLOQUE 9: ADMIN (Pedido 07/01/2026)
 def bloque_9_admin():
-    st.title("⚙️ Administración del Sistema")
-    st.subheader("🔐 Manual: Cambio de Contraseña")
-    
-    with st.form("form_cambio_pass"):
-        u_mod = st.text_input("Confirmar nombre de usuario")
-        new_p = st.text_input("Nueva Contraseña", type="password")
-        conf_p = st.text_input("Repetir Contraseña", type="password")
-        
-        if st.form_submit_button("Actualizar Credenciales"):
-            if new_p == conf_p and new_p != "":
+    st.title("⚙️ Administración")
+    st.subheader("🔐 Cambio de Contraseña")
+    with st.form("pass_form"):
+        u = st.text_input("Usuario")
+        p1 = st.text_input("Nueva Clave", type="password")
+        p2 = st.text_input("Confirmar Clave", type="password")
+        if st.form_submit_button("Guardar"):
+            if p1 == p2 and u:
                 conn = obtener_conexion()
-                h = hash_password(new_p)
-                conn.execute("UPDATE usuarios SET password=? WHERE usuario=?", (h, u_mod))
+                h = hashlib.sha256(str.encode(p1)).hexdigest()
+                conn.execute("UPDATE usuarios SET password=? WHERE usuario=?", (h, u))
                 conn.commit()
                 conn.close()
-                st.success(f"Contraseña de {u_mod} actualizada correctamente.")
-            else:
-                st.error("Las contraseñas no coinciden o el campo está vacío.")
-                
-# =================================================================
-# BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
-# =================================================================
-def bloque_0_dashboard():
-    st.title("🏥 Panel de Control APS - Orán")
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-
-    # 1. MÉTRICAS RÁPIDAS (Top Cards)
-    c1, c2, c3 = st.columns(3)
-    try:
-        total_personas = cursor.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        total_casas = cursor.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-        ronda_v, _ = obtener_ronda_info() # Función que ya tenemos
-        
-        c1.metric("Población Censada", f"{total_personas} pers.")
-        c2.metric("Viviendas Relevadas", f"{total_casas}")
-        c3.metric("Ronda Actual", f"N° {ronda_v}")
-    except:
-        st.info("Iniciando sistema... Realice su primera carga para ver métricas.")
-
-    st.divider()
-
-    # 2. SECCIÓN DE ALERTAS CRÍTICAS
-    col_alerta1, col_alerta2 = st.columns(2)
-
-    with col_alerta1:
-        st.subheader("🚩 Viviendas en Riesgo")
-        # Buscamos casas con prioridad Alta o CRÍTICA
-        try:
-            query_riesgo = """
-                SELECT nro_casa, prioridad, registrado_por 
-                FROM viviendas 
-                WHERE prioridad IN ('Alta', 'CRÍTICA')
-                ORDER BY prioridad DESC
-            """
-            df_riesgo = pd.read_sql(query_riesgo, conn)
-
-            if not df_riesgo.empty:
-                for _, row in df_riesgo.iterrows():
-                    color = "red" if row['prioridad'] == 'CRÍTICA' else "orange"
-                    st.error(f"**Casa {row['nro_casa']}** - Prioridad: {row['prioridad']} (Agente: {row['registrado_por']})")
-            else:
-                st.success("✅ No hay viviendas con riesgo crítico detectado.")
-        except:
-            st.info("Sin datos de viviendas aún.")
-
-    with col_alerta2:
-        st.subheader("👶 Alerta de Vacunación Infantil")
-        # Buscamos niños menores de 5 años sin vacunas registradas en la ronda actual
-        try:
-            # Calculamos fecha de corte para menores de 5 años
-            fecha_limite = (date.today() - timedelta(days=5*365)).isoformat()
-            
-            query_vacunas = f"""
-                SELECT i.dni, i.nombre, i.nro_casa
-                FROM integrantes i
-                LEFT JOIN vacunas v ON i.dni = v.dni
-                WHERE i.f_nac > '{fecha_limite}' 
-                AND v.dni IS NULL
-            """
-            df_niños_sin_v = pd.read_sql(query_vacunas, conn)
-
-            if not df_niños_sin_v.empty:
-                st.warning(f"Hay {len(df_niños_sin_v)} niños menores de 5 años sin vacunas cargadas.")
-                st.dataframe(df_niños_sin_v[['nro_casa', 'nombre']], use_container_width=True)
-            else:
-                st.success("✅ Todos los niños censados tienen vacunas al día.")
-        except:
-            st.info("Sin datos de vacunas aún.")
-
-    conn.close()
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
-# Estilo CSS personalizado para mejorar la apariencia de las tablas y tarjetas
-st.markdown("""
-    <style>
-    .main {
-        background-color: #F5F5F5;
-    }
-    .stButton>button {
-        border-radius: 20px;
-        border: 1px solid #2E7D32;
-        transition: all 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #2E7D32;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-# --- FUNCIONES DE BASE DE DATOS INTEGRADAS ---
-def obtener_conexion():
-    """Crea la conexión a la base de datos local"""
-    return sqlite3.connect('aps_oran_final.db')
-    # 1. Crear tabla de Usuarios con nombres de columna explícitos
-    c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-        usuario TEXT PRIMARY KEY, 
-        nombre TEXT, 
-        rol TEXT, 
-        password TEXT)''')
-    
-    # 2. Otras tablas necesarias
-    c.execute('''CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)''')
-
-    # 3. INSERTAR ADMIN (Corregido: Especificamos las columnas para evitar el OperationalError)
-    admin_pass = hashlib.sha256(str.encode('oran2026')).hexdigest()
-    
-    try:
-        # Al decir (usuario, nombre, rol, password), evitamos el error de "column mismatch"
-        c.execute("""
-            INSERT OR IGNORE INTO usuarios (usuario, nombre, rol, password) 
-            VALUES (?, ?, ?, ?)
-        """, ('admin', 'Admin Orán', 'Administrador', admin_pass))
-    except sqlite3.OperationalError:
-        # Si aun así falla, es porque la tabla vieja tiene columnas distintas. 
-        # En ese caso, agregamos la columna que falte (probablemente 'nombre' o 'rol')
-        pass
-
-    conn.commit()
-    conn.close()
-def hash_password(password):
-    """Encripta las contraseñas"""
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def chequear_vacunas_faltantes(dni):
-    """Lógica de alertas de vacunas"""
-    vacunas_obligatorias = ["BCG", "Hepatitis B", "Quintuple", "Fiebre Amarilla"]
-    conn = obtener_conexion()
-    try:
-        aplicadas = pd.read_sql("SELECT vacuna FROM vacunas WHERE dni=?", conn, params=(dni,))['vacuna'].tolist()
-    except: aplicadas = []
-    finally: conn.close()
-    return [v for v in vacunas_obligatorias if v not in aplicadas]
-# Al inicio de la función main, llamas a la inicialización
-def main():
-    inicializar_db() # Esto asegura que las tablas existan antes de que el usuario haga login
-    # ... resto del código ...
-import streamlit as st
-import sqlite3
-import pandas as pd
-import pydeck as pdk
-from datetime import datetime, date
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
-# ==========================================
-# FUNCIONES DE SOPORTE (Copiar antes del Bloque 0)
-# ==========================================
-
-def obtener_equipo_agentes(nombre_supervisor):
-    """Busca en la DB todos los agentes asignados a este supervisor"""
-    conn = obtener_conexion()
-    try:
-        query = "SELECT usuario FROM usuarios WHERE supervisor_asignado = ?"
-        df = pd.read_sql(query, conn, params=(nombre_supervisor,))
-        lista_equipo = df['usuario'].tolist()
-    except:
-        lista_equipo = []
-    finally:
-        conn.close()
-    
-    lista_equipo.append(nombre_supervisor) # Incluimos al supervisor
-    return lista_equipo
-
-def obtener_ronda_info():
-    """Calcula ronda por fecha y recupera la manual de la DB"""
-    mes_actual = datetime.now().month
-    ronda_sugerida = (mes_actual - 1) // 3 + 1
-    
-    conn = obtener_conexion()
-    try:
-        res = pd.read_sql("SELECT valor FROM configuracion WHERE parametro='ronda_actual'", conn)
-        ronda_manual = int(res.iloc[0]['valor'])
-    except:
-        ronda_manual = ronda_sugerida
-    finally:
-        conn.close()
-    return ronda_manual, ronda_sugerida
-def inicializar_tablas_sistema():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    
-    conn.commit()
-    conn.close()
-# ==========================================
-# BLOQUE 0: DASHBOARD / PANTALLA PRINCIPAL
-# ==========================================
-def bloque_0_dashboard():
-    import sqlite3
-    import pandas as pd
-    from datetime import date, timedelta
-
-    st.title("🏥 Panel de Control APS - Orán")
-    
-    # Creamos un contenedor vacío para las métricas
-    dashboard_placeholder = st.empty()
-
-    with dashboard_placeholder.container():
-        try:
-            conn = sqlite3.connect('aps_oran_final.db')
-            
-            # Consultas rápidas
-            p = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-            v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
-            
-            # Mostramos métricas con fondo de color usando st.info/warning si st.metric falla
-            c1, c2, c3 = st.columns(3)
-            c1.metric("👥 Población", f"{p} personas")
-            c2.metric("🏠 Viviendas", f"{v} casas")
-            c3.metric("📅 Fecha", date.today().strftime("%d/%m/%Y"))
-            
-            st.divider()
-
-            # SECCIÓN DE ALERTAS (Requisito 07/01/2026)
-            st.subheader("🚨 Alertas Sanitarias")
-            
-            # Alerta de Niños sin vacunas
-            fecha_corte = (date.today() - timedelta(days=5*365)).isoformat()
-            df_v = pd.read_sql(f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{fecha_corte}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)", conn)
-            
-            if not df_v.empty:
-                st.error(f"⚠️ Se detectaron {len(df_v)} niños con esquemas incompletos.")
-                st.dataframe(df_v, use_container_width=True)
-            else:
-                st.success("✅ Cobertura de vacunación completa.")
-
-            conn.close()
-        except Exception as e:
-            st.error(f"Error técnico en el Dashboard: {e}")
+                st.success("Clave actualizada")
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1835,6 +1575,7 @@ def main():
 # Asegúrate de que esto quede al final de todo el archivo
 if __name__ == "__main__":
     main()
+
 
 
 
