@@ -4,46 +4,39 @@ import sqlite3
 import hashlib
 from datetime import datetime, date, timedelta
 
-# --- 1. CONFIGURACIÓN INICIAL (Solo debe aparecer una vez) ---
+# --- 1. CONFIGURACIÓN INICIAL ---
 if 'config_ok' not in st.session_state:
     st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
     st.session_state.config_ok = True
 
-# --- 2. MOTOR DE BASE DE DATOS (Repara columnas del 07/01/2026) ---
+# --- 2. FUNCIÓN DE BASE DE DATOS (UNIFICADA) ---
 def inicializar_db():
-    """Función unificada para evitar el NameError"""
+    """Crea y repara tablas para evitar el NameError"""
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # Crear tablas base
+    # Crear tablas
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY)")
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-
-    # Función para reparar columnas sin borrar datos
-    def reparar_col(tabla, columna, tipo):
-        cursor.execute(f"PRAGMA table_info({tabla})")
-        columnas = [info[1] for info in cursor.fetchall()]
-        if columna not in columnas:
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
-
-    # Columnas necesarias para el Dashboard de Inicio
-    for c in ["nombre", "f_nac", "nro_casa", "ronda"]:
-        reparar_col("integrantes", c, "TEXT")
-    for c in ["prioridad", "registrado_por"]:
-        reparar_col("viviendas", c, "TEXT")
     
-    # Usuario Admin por defecto
-    admin_p = hashlib.sha256(str.encode('oran2026')).hexdigest()
-    cursor.execute("INSERT OR IGNORE INTO usuarios (usuario, rol, password) VALUES (?,?,?)", 
-                  ('admin', 'Administrador', admin_p))
+    # Reparar columnas para el Inicio (09/01/2026)
+    def reparar(tabla, col, tipo):
+        cursor.execute(f"PRAGMA table_info({tabla})")
+        existentes = [info[1] for info in cursor.fetchall()]
+        if col not in existentes:
+            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
+
+    for c in ["nombre", "f_nac", "nro_casa", "ronda"]:
+        reparar("integrantes", c, "TEXT")
+    for c in ["prioridad", "registrado_por"]:
+        reparar("viviendas", c, "TEXT")
 
     conn.commit()
     return conn
 
-# --- 3. BLOQUE 0: INICIO (Alertas de Vacunación) ---
+# --- 3. PANTALLA DE INICIO (Con Alertas de Vacunación) ---
 def bloque_0_inicio():
     st.title("🏥 Sistema APS Orán - Inicio")
     conn = inicializar_db()
@@ -54,42 +47,48 @@ def bloque_0_inicio():
         v = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Población Total", f"{p} pers.")
-        c2.metric("Casas Visitadas", v)
-        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
+        c1.metric("Población Registrada", f"{p} pers.")
+        c2.metric("Viviendas Visitadas", v)
+        c3.metric("Fecha Actual", date.today().strftime("%d/%m/%Y"))
 
         st.divider()
 
-        # Alertas críticas
+        # ALERTAS DEL 07/01/2026
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("🚩 Viviendas en Riesgo")
+            st.subheader("🚩 Riesgo Habitacional")
             df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            st.dataframe(df_r, use_container_width=True) if not df_r.empty else st.success("Sin alertas.")
+            if not df_r.empty: st.error(f"{len(df_r)} casas en riesgo"); st.table(df_r)
+            else: st.success("✅ Sin riesgos críticos.")
 
         with col2:
             st.subheader("👶 Alerta Vacunación (<5 años)")
             limite = (date.today() - timedelta(days=5*365)).isoformat()
+            # Esta consulta busca niños que no están en la tabla de vacunas
             query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
             df_v = pd.read_sql(query, conn)
-            st.warning(f"{len(df_v)} niños pendientes") if not df_v.empty else st.success("Al día.")
+            if not df_v.empty: st.warning(f"{len(df_v)} niños con vacunas pendientes"); st.dataframe(df_v)
+            else: st.success("✅ Vacunación al día.")
     finally:
         conn.close()
 
-# --- 4. FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
+# --- 4. CONTROL DE NAVEGACIÓN (MAIN) ---
 def main():
-    # Esta llamada ahora sí funcionará (Línea 1467 corregida)
-    inicializar_db() 
+    inicializar_db()
     
     st.sidebar.title("Menú APS")
-    # Cambiado a 'Inicio'
-    opcion = st.sidebar.selectbox("Seleccione:", ["🏠 Inicio", "📝 Registro Censo"])
+    # Cambiado de Dashboard a Inicio
+    opcion = st.sidebar.selectbox("Seleccione Módulo:", ["🏠 Inicio", "📝 Registro Censo"])
     
     if opcion == "🏠 Inicio":
         bloque_0_inicio()
     elif opcion == "📝 Registro Censo":
         st.write("---")
-        # Aquí continúa el código de tu Censo
+        # Aquí puedes llamar a tu función de censo, por ejemplo: registro_censo_bloque1()
+
+# Ejecución única
+if __name__ == "__main__":
+    main()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1532,8 +1531,7 @@ def main():
         else:
             st.error("Error de conexión: Verifica que 'def bloque_11_vigilancia_epidemiologica():' esté bien escrito arriba.")
 
-# Asegúrate de que esto quede al final de todo el archivo
-if __name__ == "__main__":
-    main()
+
+
 
 
