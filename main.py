@@ -1446,9 +1446,7 @@ def bloque_11_vigilancia_epidemiologica():
 # NAVEGACION
 # ==========================================
 def main():
-    # Inicialización necesaria
-    if 'inicializar_db' in globals():
-        inicializar_db()
+    inicializar_db() 
     
     st.sidebar.title("🏥 APS Orán 2026")
     
@@ -1459,91 +1457,45 @@ def main():
         "🚨 11. Vigilancia Epidemiológica"
     ]
     
-    # El 'key' evita el error de DuplicateElementId
-    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="selector_principal_v3")
+    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_aps_final")
 
-    # --- NAVEGACIÓN ---
+    # --- NAVEGACIÓN CON NOMBRES EXACTOS DE TU LISTA ---
     if seleccion == "🏠 Inicio":
-        if 'bloque_0_inicio' in globals():
-            bloque_0_inicio()
-        else:
-            st.info("Bienvenido. Seleccione un módulo para comenzar.")
+        bloque_0_inicio()
 
     elif seleccion == "📝 1. Censo":
-        if 'bloque_1_censo' in globals(): globals()['bloque_1_censo']()
-        elif 'censo' in globals(): globals()['censo']()
+        bloque_1_censo()
 
     elif seleccion == "🤰 2. Embarazadas":
-        if 'bloque_2_materno' in globals(): globals()['bloque_2_materno']()
+        bloque_2_materno()
 
     elif seleccion == "🏠 3. Viviendas":
-        # Agregamos los nombres más comunes que podrías tener
-        nombres_posibles = [
-            'bloque_3_viviendas', 'viviendas', 'bloque_viviendas', 
-            'formulario_viviendas', 'bloque3', 'registrar_viviendas'
-        ]
-        
-        encontrado = False
-        for nombre in nombres_posibles:
-            if nombre in globals():
-                globals()[nombre]()
-                encontrado = True
-                break
-        
-        if not encontrado:
-            st.error("⚠️ No se encontró la función.")
-            # Esto te ayudará a ver cómo se llaman tus funciones realmente:
-            with st.expander("Ver nombres de funciones disponibles"):
-                todas_las_funciones = [k for k, v in globals().items() if callable(v)]
-                st.write(todas_las_funciones)
-        else: 
-            st.error("⚠️ No se encontró la función de Viviendas. Revisa si en tu código dice 'def bloque_3_viviendas():' o algo similar.")
+        # CORREGIDO: Ahora llama a 'bloque_3_vivienda' (singular) como en tu lista
+        bloque_3_vivienda()
 
     elif seleccion == "💉 4. Vacunación":
-        if 'bloque_4_vacunas' in globals(): globals()['bloque_4_vacunas']()
+        bloque_4_vacunas()
 
     elif seleccion == "🍎 5. Nutrición":
-        if 'bloque_3_nutricion' in globals(): bloque_3_nutricion()
-        elif 'nutricion' in globals(): nutricion()
-        elif 'bloque_5_nutricion' in globals(): bloque_5_nutricion()
-        else: st.warning("Sección Nutrición: Revisa el nombre de la función.")
+        bloque_5_nutricion()
 
     elif seleccion == "🦠 6. TBC":
-        if 'bloque_5_tbc' in globals(): bloque_5_tbc()
-        elif 'bloque_6_tbc' in globals(): bloque_6_tbc()
-        elif 'tbc' in globals(): tbc()
-        else: st.warning("Sección TBC: Revisa el nombre de la función.")
+        bloque_6_tbc()
 
     elif seleccion == "📊 7. Estadísticas":
-        if 'bloque_10_stats' in globals(): bloque_10_stats()
-        elif 'bloque_7_stats' in globals(): bloque_7_stats()
-        elif 'estadisticas' in globals(): estadisticas()
-        else: st.error("No se encontró la función de Estadísticas")
+        bloque_7_estadisticas()
 
     elif seleccion == "👥 8. Seguimiento Agentes":
-        if 'bloque_8_seguimiento' in globals(): bloque_8_seguimiento()
-        elif 'seguimiento' in globals(): seguimiento()
+        bloque_8_seguimiento_agentes()
 
     elif seleccion == "⚙️ 9. Admin":
-        # Se asume que bloque_9_admin ya está definida arriba
-        if 'bloque_9_admin' in globals(): bloque_9_admin()
-        else: st.error("Función Admin no encontrada")
+        bloque_9_admin()
 
     elif seleccion == "🚀 10. Gestión Avanzada":
-        if 'bloque_10_gestion_avanzada' in globals():
-            bloque_10_gestion_avanzada()
-        else:
-            st.error("Error: 'def bloque_10_gestion_avanzada():' no encontrada.")
+        bloque_10_gestion_avanzada()
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
-        if 'bloque_11_vigilancia_epidemiologica' in globals():
-            bloque_11_vigilancia_epidemiologica()
-        else:
-            st.error("Error: 'def bloque_11_vigilancia_epidemiologica():' no encontrada.")
+        bloque_11_vigilancia_epidemiologica()
 
-# Único disparador al final del archivo
 if __name__ == "__main__":
     main()
-
-
-
