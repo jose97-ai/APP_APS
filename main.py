@@ -1045,10 +1045,12 @@ def bloque_8_analisis_agente(): bloque_8_analisis()
 # ==========================================
 # BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS
 # ==========================================
-def bloque_9_configuracion():
+# Cambia la definición de la función:
+def bloque_9_admin():  # <-- Cámbiale el nombre aquí
     if st.session_state.get('usuario_logueado') != 'admin':
         st.error("🚫 Acceso denegado.")
         return
+    # ... (el resto del código igual)
 
     st.title("⚙️ Gestión Superior APS")
     conn = sqlite3.connect('aps_oran_final.db')
@@ -1265,6 +1267,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
