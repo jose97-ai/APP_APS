@@ -1235,7 +1235,8 @@ def inicializar_tablas_sistema():
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
     
     conn.commit()
-    conn.close()import streamlit as st
+    conn.close()
+import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
@@ -1583,6 +1584,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
