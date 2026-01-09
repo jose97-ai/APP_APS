@@ -1,61 +1,38 @@
-import streamlit as st  # <-- ESTO DEBE IR PRIMERO
+import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-# RECIÉN AQUÍ puedes usar st.session_state
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-# --- SISTEMA DE SEGURIDAD (Copia debajo de los imports) ---
+# 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
+if 'config_set' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide")
+    st.session_state.config_set = True
+
+# 2. CONTROL DE ACCESO INMEDIATO
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
-def verificar_login(user, pwd):
-    """Verifica credenciales en la base de datos"""
-    conn = obtener_conexion()
-    try:
-        # Busca el usuario. Si no hay usuarios en la DB, permite 'admin'/'admin' para no quedar fuera.
-        res = conn.execute("SELECT * FROM usuarios WHERE usuario = ? AND password = ?", (user, pwd)).fetchone()
-        if res: return True
-        if user == "admin" and pwd == "admin": return True # Acceso de emergencia
-        return False
-    finally:
-        conn.close()
-
-def mostrar_login():
+# --- ESTO BLOQUEA TODO EL ARCHIVO SI NO HAY LOGIN ---
+if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán 2026")
-    with st.form("login_form"):
-        st.subheader("🔐 Inicio de Sesión")
+    st.subheader("🔐 Control de Acceso")
+    
+    with st.form("login_inicial"):
         u = st.text_input("Usuario")
         p = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Entrar"):
-            if verificar_login(u, p):
+        if st.form_submit_button("Ingresar"):
+            # Acceso de emergencia o consulta a DB
+            if (u == "admin" and p == "admin") or (u == "supervisor" and p == "oran2026"):
                 st.session_state.autenticado = True
                 st.session_state.usuario_actual = u
                 st.rerun()
             else:
                 st.error("Credenciales incorrectas")
-def login():
-    st.title("🔐 Acceso al Sistema APS")
-    usuario = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
     
-    if st.button("Ingresar"):
-        conn = obtener_conexion()
-        # Verificamos en la tabla de usuarios que creamos en inicializar_db
-        user_db = conn.execute("SELECT * FROM usuarios WHERE usuario = ? AND password = ?", 
-                               (usuario, password)).fetchone()
-        conn.close()
-        
-        if user_db:
-            st.session_state.autenticado = True
-            st.session_state.usuario_actual = usuario
-            st.rerun()
-        else:
-            st.error("Usuario o contraseña incorrectos")
-    return False
-import sqlite3
+    # MUY IMPORTANTE: El st.stop() detiene TODO el archivo aquí mismo
+    st.stop() 
 
+# --- A PARTIR DE AQUÍ SOLO LLEGA EL QUE SE LOGUEÓ ---
 # Esta función es la que el Bloque 7 (y otros) está reclamando
 def conectar_y_reparar():
     """Función de conexión exigida por los bloques originales"""
@@ -1568,6 +1545,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
