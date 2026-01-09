@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -3068,6 +3067,7 @@ def main():
 # Único disparador al final del archivo
 if __name__ == "__main__":
     main()
+
 
 
 
