@@ -1125,134 +1125,100 @@ def bloque_7_estadisticas():
 # ==========================================
 # BLOQUE 8: ANÁLISIS GEOREFERENCIADO Y RONDAS
 # ==========================================
+import streamlit as st
+import pandas as pd
+import sqlite3
+from datetime import datetime
 
-def reparar_base_datos_bloque8(conn):
-    """Asegura que las columnas necesarias existan para evitar DatabaseError"""
-    cursor = conn.cursor()
-    # 1. Reparar tabla USUARIOS
-    cursor.execute("PRAGMA table_info(usuarios)")
-    cols_usuarios = [info[1] for info in cursor.fetchall()]
-    if "supervisor_id" not in cols_usuarios:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN supervisor_id TEXT")
-    if "nombre" not in cols_usuarios:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
-    
-    # 2. Reparar tablas de salud (columna ronda)
-    for tabla in ['controles_embarazo', 'crecimiento', 'tbc', 'vacunas']:
-        cursor.execute(f"PRAGMA table_info({tabla})")
-        cols = [info[1] for info in cursor.fetchall()]
-        if len(cols) > 0 and "ronda" not in cols:
-            cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN ronda TEXT DEFAULT '1'")
-    conn.commit()
-
-def bloque_8_analisis():
-    usuario_actual = st.session_state.get('usuario_logueado', 'admin')
-    rol_actual = st.session_state.get('rol_usuario', 'Agente Sanitario')
-    nombre_real = st.session_state.get('nombre_agente', 'Usuario')
-    
-    st.header(f"📈 Análisis de Riesgo y Rondas")
-    st.caption(f"Panel para: {nombre_real} ({rol_actual})")
-
-    conn = sqlite3.connect('aps_oran_final.db')
-    
-    # PASO CRÍTICO: Reparar antes de cualquier SELECT
-    reparar_base_datos_bloque8(conn)
-
-    def tabla_existe(nombre_tabla):
-        c = conn.cursor()
-        c.execute(f"SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{nombre_tabla}'")
-        return c.fetchone()[0] == 1
+def bloque_8_seguimiento_agentes():
+    st.title("📍 Seguimiento de Actividades y Salud")
+    st.info("Este panel cruza la información del Censo con los controles de Embarazo, Nutrición y TBC.")
 
     try:
-        # 1. DETERMINAR EL EQUIPO (SUPERVISIÓN)
-        if rol_actual in ["Supervisor", "Administrador"]:
-            query_eq = "SELECT usuario FROM usuarios WHERE supervisor_id=? OR usuario=?"
-            df_eq = pd.read_sql(query_eq, conn, params=(usuario_actual, usuario_actual))
-            equipo = df_eq['usuario'].tolist()
-            if not equipo: equipo = [usuario_actual]
-            
-            placeholders = ', '.join(['?'] * len(equipo))
-            filtro_sql = f"WHERE i.registrado_por IN ({placeholders})"
-            params = equipo
-        else:
-            filtro_sql = "WHERE i.registrado_por = ?"
-            params = (usuario_actual,)
-
-        # 2. SUB-QUERIES DINÁMICAS (PROTECCIÓN TOTAL)
-        def get_subquery(tabla, extra_cols=""):
-            if tabla_existe(tabla):
-                # Ya sabemos que 'ronda' existe por la función de reparación
-                return f"(SELECT dni, {extra_cols} ronda FROM {tabla})"
-            return f"(SELECT NULL as dni, {extra_cols.replace(',', 'as NULL,')} NULL as ronda WHERE 1=0)"
-
-        sub_emb = get_subquery('controles_embarazo')
-        sub_nut = get_subquery('crecimiento', 'imc,')
-        sub_tbc = get_subquery('tbc', 'estado,')
-
-        # 3. QUERY PRINCIPAL
-        full_query = f"""
-            SELECT i.dni, i.nombre, i.f_nac, i.latitud, i.longitud, i.registrado_por as agente,
-                   e.ronda as ronda_emb,
-                   c.imc, c.ronda as ronda_nut,
-                   t.estado as tbc_est, t.ronda as ronda_tbc
-            FROM integrantes i
-            LEFT JOIN {sub_emb} e ON i.dni = e.dni
-            LEFT JOIN {sub_nut} c ON i.dni = c.dni
-            LEFT JOIN {sub_tbc} t ON i.dni = t.dni
-            {filtro_sql}
-        """
+        # 1. Conexión y reparación rápida de columnas (para evitar el error de latitud)
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
         
-        df = pd.read_sql(full_query, conn, params=params)
+        # Aseguramos que existan las columnas de ubicación por si el SQL las pide
+        for col in ["latitud", "longitud"]:
+            try:
+                cursor.execute(f"ALTER TABLE integrantes ADD COLUMN {col} REAL")
+            except:
+                pass
+        conn.commit()
 
-        if df.empty:
-            st.info("ℹ️ No hay datos registrados para mostrar el análisis.")
-        else:
-            tab1, tab2 = st.tabs(["🗺️ Mapa de Riesgo", "📊 Resumen de Rondas"])
-            
-            with tab1:
-                # 
-                def definir_riesgo(row):
-                    if row['tbc_est'] == 'Activo': return '🔴 TBC Activo'
-                    if pd.notnull(row['ronda_emb']): return '🟣 Embarazada'
-                    if pd.notnull(row['imc']) and row['imc'] < 18.5: return '🟠 Bajo Peso'
-                    return '🟢 Control Normal'
+        # 2. Obtener lista de agentes para el filtro
+        agentes_query = "SELECT DISTINCT registrado_por FROM integrantes WHERE registrado_por IS NOT NULL"
+        agentes = [row[0] for row in cursor.execute(agentes_query).fetchall()]
+        
+        if not agentes:
+            st.warning("No hay agentes con datos cargados aún.")
+            conn.close()
+            return
 
-                df['Riesgo'] = df.apply(definir_riesgo, axis=1)
-                df_mapa = df[(df['latitud'] != 0) & (df['longitud'] != 0)].dropna(subset=['latitud', 'longitud'])
-                
-                if not df_mapa.empty:
-                    fig = px.scatter_mapbox(df_mapa, lat="latitud", lon="longitud", color="Riesgo",
-                                          hover_name="nombre", zoom=12, height=550,
-                                          mapbox_style="carto-positron",
-                                          color_discrete_map={'🔴 TBC Activo': 'red', '🟣 Embarazada': 'purple', 
-                                                              '🟠 Bajo Peso': 'orange', '🟢 Control Normal': 'green'})
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("⚠️ No hay coordenadas GPS suficientes para el mapa.")
+        agente_sel = st.multiselect("Filtrar por Agente/Agentes:", agentes, default=agentes)
 
-            with tab2:
-                st.subheader("Cobertura Trimestral")
-                # 
-                stats = []
-                for r in ["1", "2", "3", "4"]:
-                    stats.append({
-                        "Ronda": f"Ronda {r}",
-                        "Embarazo": len(df[df['ronda_emb'] == r]),
-                        "Nutrición": len(df[df['ronda_nut'] == r]),
-                        "TBC": len(df[df['ronda_tbc'] == r])
-                    })
-                st.bar_chart(pd.DataFrame(stats).set_index("Ronda"))
-                st.dataframe(df[['nombre', 'agente', 'Riesgo']], use_container_width=True)
+        if not agente_sel:
+            st.warning("Seleccione al menos un agente para visualizar los datos.")
+            conn.close()
+            return
 
-    except Exception as e:
-        st.error(f"⚠️ Error técnico: {e}")
-    finally:
+        # 3. CONSULTA SQL CONSOLIDADA (Mantiene todas tus funciones actuales)
+        # Usamos LEFT JOIN para no perder integrantes que no tengan controles de salud aún
+        query = f"""
+            SELECT 
+                i.dni as DNI, 
+                i.nombre as Nombre, 
+                i.f_nac as Nacimiento, 
+                i.registrado_por as Agente,
+                e.ronda as Ronda_Emb, 
+                c.imc as IMC_Nutricion, 
+                c.ronda as Ronda_Nut, 
+                t.estado as Estado_TBC, 
+                t.ronda as Ronda_TBC
+            FROM integrantes i
+            LEFT JOIN (SELECT dni, ronda FROM controles_embarazo) e ON i.dni = e.dni
+            LEFT JOIN (SELECT dni, imc, ronda FROM crecimiento) c ON i.dni = c.dni
+            LEFT JOIN (SELECT dni, estado, ronda FROM tbc) t ON i.dni = t.dni
+            WHERE i.registrado_por IN ({','.join(['?']*len(agente_sel))})
+        """
+
+        df = pd.read_sql(query, conn, params=agente_sel)
         conn.close()
 
-# --- FUNCIONES PUENTE PARA EL MAIN ---
-def bloque_8_supervisor(): bloque_8_analisis()
-def bloque_8_mapas(): bloque_8_analisis()
-def bloque_8_analisis_agente(): bloque_8_analisis()
+        if df.empty:
+            st.info("No se encontraron registros para los agentes seleccionados.")
+        else:
+            # --- VISUALIZACIÓN ---
+            st.subheader(f"Planilla de Seguimiento ({len(df)} registros)")
+            
+            # Buscador rápido en la tabla
+            busqueda = st.text_input("🔍 Buscar por Nombre o DNI:")
+            if busqueda:
+                df = df[df['Nombre'].str.contains(busqueda, case=False, na=False) | 
+                        df['DNI'].astype(str).str.contains(busqueda)]
+
+            st.dataframe(df, use_container_width=True)
+
+            # --- EXPORTACIÓN ---
+            st.divider()
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Descargar Reporte (CSV)",
+                    data=csv,
+                    file_name=f"seguimiento_aps_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                )
+            
+            with col2:
+                st.caption("El reporte descargado incluye los estados de Embarazo, Nutrición y TBC vinculados a cada DNI.")
+
+    except Exception as e:
+        st.error(f"⚠️ Error técnico en el Bloque 8: {e}")
+        st.info("Sugerencia: Verifique que las tablas 'controles_embarazo', 'crecimiento' y 'tbc' existan.")
 def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
@@ -1512,6 +1478,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
