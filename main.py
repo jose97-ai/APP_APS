@@ -7,45 +7,48 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. OCULTAR GITHUB Y EL BOTÓN DE DEPLOY SIN MATAR LA BARRA */
-    .stAppDeployButton, .css-1rs6os0, .st-emotion-cache-1rs6os0, .st-emotion-cache-6q9sum {
-        display: none !important;
-        visibility: hidden !important;
+    /* 1. CREAMOS UN ESCUDO QUE TAPA A GITHUB */
+    /* Ponemos un bloque blanco encima de toda la esquina derecha del header */
+    header[data-testid="stHeader"]::after {
+        content: "🏥 Sistema APS Orán"; /* Texto opcional para que parezca oficial */
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 300px; /* Suficiente para tapar GitHub y Deploy */
+        height: 60px;
+        background-color: white; /* Debe ser igual al fondo de tu app */
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #007bff;
     }
 
-    /* 2. HACER QUE LA BARRA SUPERIOR SEA INVISIBLE PERO ESTÉ AHÍ */
-    header[data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
-        color: rgba(0,0,0,0) !important;
-    }
+    /* 2. OCULTAMOS EL MENÚ DE LAS 3 RAYAS (Por si acaso) */
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
 
-    /* 3. CREAR NUESTRA PROPIA FLECHITA AZUL */
-    /* Este código busca el control del sidebar y lo pone por encima de todo */
+    /* 3. RESCATAMOS LA FLECHITA Y LA PONEMOS POR ENCIMA DEL ESCUDO */
     [data-testid="stSidebarCollapsedControl"] {
-        display: flex !important;
         visibility: visible !important;
-        z-index: 9999999 !important;
-        background-color: #007bff !important; /* Azul llamativo */
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 10px !important;
+        display: flex !important;
         position: fixed !important;
-        top: 15px !important;
-        left: 15px !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.3) !important;
+        top: 10px !important;
+        left: 10px !important;
+        background-color: #007bff !important; /* Azul para que se vea bien */
+        color: white !important;
+        border-radius: 8px !important;
+        z-index: 1000000 !important; /* Más alto que el escudo */
+        padding: 5px !important;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
     }
 
-    /* Forzamos que el icono de la flecha sea blanco para que se vea */
+    /* Forzamos que la flecha sea blanca */
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: white !important;
-        stroke: white !important;
-        width: 25px !important;
-        height: 25px !important;
+        color: white !important;
     }
-
-    /* 4. OCULTAR MENÚ DE 3 RAYAS Y EL FOOTER */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1598,6 +1601,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
