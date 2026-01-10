@@ -7,36 +7,6 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. ELIMINAR GITHUB Y MENÚ DEPLOY POR COMPLETO */
-    .stAppDeployButton, 
-    header[data-testid="stHeader"] .st-emotion-cache-1rs6os0,
-    header[data-testid="stHeader"] .st-emotion-cache-12fmjuu,
-    header[data-testid="stHeader"] a {
-        display: none !important;
-        visibility: hidden !important;
-    }
-
-    /* 2. HACER QUE EL HEADER NO TENGA COLOR PARA QUE NO SE VEA LA FRANJA */
-    header[data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
-    }
-
-    /* 3. RESCATAR SOLO EL BOTÓN DE LA BARRA LATERAL */
-    /* Lo hacemos flotante y visible para que no se pierda al cerrar */
-    [data-testid="stSidebarCollapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        background-color: #007bff !important; /* Azul para que se vea */
-        color: white !important;
-        border-radius: 5px !important;
-        top: 10px !important;
-        left: 10px !important;
-        position: fixed !important;
-        z-index: 1000000;
-    }
-    </style>
-    """, unsafe_allow_html=True)st.markdown("""
-    <style>
     /* 1. OCULTA EL HEADER COMPLETO (Esto quita GitHub, Deploy y la franja blanca) */
     header[data-testid="stHeader"] {
         visibility: hidden;
@@ -70,7 +40,6 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-
 # Lógica de seguridad (Login)
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
@@ -1621,6 +1590,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
