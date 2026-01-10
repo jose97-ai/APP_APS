@@ -51,29 +51,55 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+import streamlit as st
+import sqlite3
+
+# 1. LA FUNCIÓN DEBE ESTAR DEFINIDA ANTES DEL MAIN
+def inicializar_db():
+    try:
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                usuario TEXT PRIMARY KEY, 
+                password TEXT, 
+                rol TEXT
+            )
+        """)
+        # Verificamos si existe el admin, sino lo creamos
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"Error de base de datos: {e}")
+
+# 2. EL MAIN CON EL LOGIN QUE BLOQUEA ERRORES
 def main():
-    # 1. Configuración de la página (Siempre al principio)
+    # Configuración de página (Siempre lo primero)
     if 'config_set' not in st.session_state:
         st.set_page_config(page_title="APS Orán 2026", layout="wide")
         st.session_state.config_set = True
 
-    # 2. Inicializar base de datos (se abre y cierra sola)
+    # Inicializamos la base de datos (Línea 1531 corregida)
     inicializar_db()
 
-    # 3. Control de Sesión
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
 
-    # --- NUEVA LÓGICA DE LOGIN (REPARADA) ---
+    # --- LÓGICA DE LOGIN ---
     if not st.session_state.autenticado:
         st.title("🏥 Sistema APS Orán")
         
-        # Usamos un contenedor para limpiar la interfaz
-        u = st.text_input("Usuario", key="u_login").strip().lower()
-        p = st.text_input("Contraseña", type="password", key="p_login").strip()
-        
-        if st.button("Ingresar", use_container_width=True):
-            # Validación directa para evitar fallos de conexión en el login
+        # Formulario para evitar recargas accidentales
+        with st.form("login_aps"):
+            u = st.text_input("Usuario").strip().lower()
+            p = st.text_input("Contraseña", type="password").strip()
+            submit = st.form_submit_button("Ingresar")
+            
+        if submit:
+            # Validación Directa (Llave Maestra)
             if u == "admin" and (p == "123" or p == "oran2026"):
                 st.session_state.autenticado = True
                 st.session_state.usuario_logueado = "Administrador"
@@ -81,20 +107,21 @@ def main():
             else:
                 st.error("Credenciales incorrectas")
         
-        # ESTA ES LA CLAVE: Si no está autenticado, detiene TODO el script aquí.
-        # Así evitamos que se llame a bloque_0_inicio() en la línea 117.
+        # EL STOP ES VITAL: Detiene el código aquí para que no salte el error en Bloque 0
         st.stop() 
 
-    # --- SI LLEGÓ AQUÍ, EL LOGIN FUE EXITOSO ---
-    # Ya no hay riesgo de NameError porque el flujo es lineal
-    st.sidebar.title(f"Bienvenido {st.session_state.usuario_logueado}")
-    
-    menu = st.sidebar.radio("Menú", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
+    # --- TODO LO QUE SIGUE SOLO SE VE SI ESTÁ AUTENTICADO ---
+    st.sidebar.title(f"👤 {st.session_state.usuario_logueado}")
+    menu = st.sidebar.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
 
     if menu == "🏠 Inicio":
-        bloque_0_inicio() # Ahora sí cargará con las alertas de vacunación del 07/01
+        bloque_0_inicio() # Aquí verás las alertas de vacunación del 07/01
     elif menu == "⚙️ Admin":
         bloque_9_admin()
+
+# 3. EJECUCIÓN DEL SCRIPT
+if __name__ == "__main__":
+    main()
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1581,6 +1608,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
