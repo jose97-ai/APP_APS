@@ -51,13 +51,18 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+import streamlit as st
 import sqlite3
 
-# --- VERIFICACIÓN INICIAL DE BASE DE DATOS ---
+# 1. CONFIGURACIÓN DE PÁGINA (SIEMPRE PRIMERO)
+if 'config_set' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide")
+    st.session_state.config_set = True
+
+# 2. INICIALIZAR BASE DE DATOS
 def inicializar_db():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-    # Creamos la tabla si no existe para que el login no de error
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             usuario TEXT PRIMARY KEY, 
@@ -65,151 +70,64 @@ def inicializar_db():
             rol TEXT
         )
     """)
-    # Si la tabla está vacía, insertamos al admin por defecto
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
         cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
-    
     conn.commit()
     conn.close()
 
-# Ejecutamos la inicialización
 inicializar_db()
-# Lógica de seguridad (Login)
-# --- LÓGICA DE LOGIN PARA APS ORÁN ---
-# --- REESTABLECIMIENTO DE ACCESO APS ORÁN ---
+
+# 3. LÓGICA DE SESIÓN
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
-if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán - Recuperación")
-    
-    # Usamos un formulario para evitar que Streamlit intente validar antes de tiempo
-    with st.form("formulario_login"):
-        u_ing = st.text_input("Nombre de Usuario").strip().lower()
-        p_ing = st.text_input("Contraseña", type="password").strip()
-        boton_entrar = st.form_submit_button("🔓 Acceder")
-
-    if boton_entrar:
-        # VALIDACIÓN DIRECTA (Prioridad Máxima)
-        if u_ing == "admin" and p_ing == "123":
-            st.session_state.autenticado = True
-            st.session_state.usuario_logueado = "Administrador"
-            st.session_state.rol = "Admin"
-            st.success("Acceso Maestro concedido")
-            st.rerun()
-        else:
-            # Si no es la clave maestra, intenta buscar en la base de datos
-            try:
-                import sqlite3
-                conn = sqlite3.connect('aps_oran_final.db')
-                cursor = conn.cursor()
-                cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u_ing, p_ing))
-                res = cursor.fetchone()
-                conn.close()
-                if res:
-                    st.session_state.autenticado = True
-                    st.session_state.usuario_logueado = res[0]
-                    st.session_state.rol = res[1]
-                    st.rerun()
-                else:
-                    st.error("❌ Error: Usuario o clave no reconocidos.")
-            except:
-                st.error("Error técnico: No se pudo leer la base de datos.")
-    st.stop()
-# --- TODO LO QUE SIGUE SOLO SE EJECUTA SI EL USUARIO YA ENTRÓ ---
-if st.session_state.autenticado:
-    with st.sidebar:
-        st.title(f"👤 {st.session_state.usuario_logueado}")
-        menu = st.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
-        
-        st.write("---")
-        if st.button("🚪 Cerrar Sesión", use_container_width=True):
-            st.session_state.autenticado = False
-            st.session_state.usuario_logueado = None
-            st.rerun()
-# 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
-if 'config_set' not in st.session_state:
-    st.set_page_config(page_title="APS Orán 2026", layout="wide")
-    st.session_state.config_set = True
-
-# 2. CONTROL DE ACCESO INMEDIATO
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-
-# --- ESTO BLOQUEA TODO EL ARCHIVO SI NO HAY LOGIN ---
+# 4. INTERFAZ DE LOGIN ÚNICA
 if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán 2026")
     st.subheader("🔐 Control de Acceso")
     
-    with st.form("login_inicial"):
-        u = st.text_input("Usuario")
-        p = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Ingresar"):
-            # Acceso de emergencia o consulta a DB
-            if (u == "admin" and p == "admin") or (u == "supervisor" and p == "oran2026"):
+    with st.form("login_unico"):
+        u = st.text_input("Usuario").strip().lower()
+        p = st.text_input("Contraseña", type="password").strip()
+        boton = st.form_submit_button("Ingresar")
+        
+        if boton:
+            # LLAVES MAESTRAS (Prueba cualquiera de estas dos)
+            if (u == "admin" and p == "123") or (u == "admin" and p == "oran2026"):
                 st.session_state.autenticado = True
-                st.session_state.usuario_actual = u
+                st.session_state.usuario_logueado = "Administrador"
+                st.session_state.rol = "Admin"
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
-    
-    # MUY IMPORTANTE: El st.stop() detiene TODO el archivo aquí mismo
+                # Intento por Base de Datos
+                try:
+                    conn = sqlite3.connect('aps_oran_final.db')
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
+                    res = cursor.fetchone()
+                    conn.close()
+                    if res:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_logueado = res[0]
+                        st.session_state.rol = res[1]
+                        st.rerun()
+                    else:
+                        st.error("❌ Credenciales incorrectas")
+                except:
+                    st.error("Error de conexión")
     st.stop() 
 
-# --- A PARTIR DE AQUÍ SOLO LLEGA EL QUE SE LOGUEÓ ---
-# Esta función es la que el Bloque 7 (y otros) está reclamando
-def conectar_y_reparar():
-    """Función de conexión exigida por los bloques originales"""
-    conn = sqlite3.connect('aps_oran_final.db')
-    # Configuramos para que las consultas devuelvan diccionarios si es necesario
-    conn.row_factory = sqlite3.Row 
-    return conn
+# 5. MENU LATERAL (SOLO SI ESTÁ AUTENTICADO)
+with st.sidebar:
+    st.title(f"👤 {st.session_state.get('usuario_logueado', 'Usuario')}")
+    menu = st.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
+    st.write("---")
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state.autenticado = False
+        st.rerun()
 
-# También definimos obtener_conexion por si otros bloques usan ese nombre
-def obtener_conexion():
-    return conectar_y_reparar()
-import streamlit as st
-import pandas as pd
-import sqlite3
-import hashlib
-from datetime import datetime, date, timedelta
-def obtener_ronda_info():
-    """Retorna la ronda actual y el año para los formularios (Línea 206)"""
-    conn = sqlite3.connect('aps_oran_final.db')
-    try:
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-        cursor.execute("SELECT valor FROM config WHERE clave = 'ronda_actual'")
-        ronda = cursor.fetchone()
-        return (ronda[0] if ronda else "1"), 2026
-    except:
-        return "1", 2026
-    finally:
-        conn.close()
-
-def obtener_conexion():
-    """Función de conexión estándar para todos los bloques"""
-    return sqlite3.connect('aps_oran_final.db')
-# --- 1. CONFIGURACIÓN ÚNICA ---
-# Evita que se ejecute la configuración más de una vez
-if 'config_lista' not in st.session_state:
-    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
-    st.session_state.config_lista = True
-
-# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN ---
-def inicializar_db():
-    """Función unificada para evitar el NameError"""
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    # Crear tablas base
-    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)")
-    conn.commit()
-    return conn
-
+# A partir de aquí sigue el resto de tu código (bloque_0_inicio, etc.)
 def bloque_0_inicio():
     st.title("🏠 Sistema APS Orán - Inicio")
     conn = inicializar_db()
@@ -1693,6 +1611,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
