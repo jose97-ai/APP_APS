@@ -51,6 +51,30 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+import sqlite3
+
+# --- VERIFICACIÓN INICIAL DE BASE DE DATOS ---
+def inicializar_db():
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Creamos la tabla si no existe para que el login no de error
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            usuario TEXT PRIMARY KEY, 
+            password TEXT, 
+            rol TEXT
+        )
+    """)
+    # Si la tabla está vacía, insertamos al admin por defecto
+    cursor.execute("SELECT COUNT(*) FROM usuarios")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
+    
+    conn.commit()
+    conn.close()
+
+# Ejecutamos la inicialización
+inicializar_db()
 # Lógica de seguridad (Login)
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
 # --- INTERFAZ DE LOGIN ---
@@ -1667,6 +1691,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
