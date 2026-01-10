@@ -52,12 +52,37 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-import streamlit as st
-import sqlite3
-import pandas as pd
-from datetime import date, datetime, timedelta
+# --- LÓGICA DE LOGIN PARA APS ORÁN ---
+def validar_usuario(u, p):
+    import sqlite3
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    
+    # Usamos LOWER para que no importe si escriben Admin o admin
+    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND password = ?", (u, p))
+    resultado = cursor.fetchone()
+    conn.close()
+    return resultado
+
+# --- INTERFAZ DEL LOGIN ---
+if not st.session_state.get('autenticado', False):
+    st.title("🏥 Sistema APS Orán - Ingreso")
+    
+    u_ingresado = st.text_input("Usuario:").strip() # .strip() quita espacios invisibles
+    p_ingresado = st.text_input("Contraseña:", type="password")
+    
+    if st.button("Entrar"):
+        datos_usuario = validar_usuario(u_ingresado, p_ingresado)
+        
+        if datos_usuario:
+            st.session_state.autenticado = True
+            st.session_state.usuario_logueado = datos_usuario[0]
+            st.session_state.rol = datos_usuario[1]
+            st.success("¡Bienvenido!")
+            st.rerun()
+        else:
+            st.error("❌ Credenciales incorrectas")
+    st.stop() # IMPORTANTE: Detiene la app si no está logueado
 
 # 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
 if 'config_set' not in st.session_state:
@@ -1624,6 +1649,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
