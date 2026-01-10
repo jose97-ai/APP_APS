@@ -7,43 +7,35 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. ELIMINAR GITHUB Y EL HEADER POR COMPLETO */
-    header[data-testid="stHeader"] {
-        visibility: hidden !important;
+    /* 1. BORRAR EL LOGO DE GITHUB Y EL BOTÓN DE DEPLOY ESPECÍFICAMENTE */
+    /* Buscamos por el atributo de accesibilidad para no fallar */
+    [data-testid="stStatusWidget"], 
+    .stAppDeployButton, 
+    header a[href*="github.com"], 
+    header svg[class*="github"] {
         display: none !important;
+        visibility: hidden !important;
     }
 
-    /* 2. RESCATAR Y MOSTRAR LA FLECHITA (BOTÓN LATERAL) */
-    /* Usamos un selector universal para encontrar el botón de colapso */
-    button[kind="headerNoContext"], [data-testid="stSidebarCollapsedControl"] {
+    /* 2. OCULTAR EL MENÚ DE LAS 3 RAYAS (DERECHA) */
+    #MainMenu {visibility: hidden !important;}
+
+    /* 3. ASEGURAR QUE EL BOTÓN DE LA BARRA LATERAL (IZQUIERDA) SEA VISIBLE */
+    /* Le damos un color fuerte para confirmar que está ahí */
+    [data-testid="stSidebarCollapsedControl"] {
         visibility: visible !important;
         display: flex !important;
-        opacity: 1 !important;
-        background-color: #007bff !important; /* Azul llamativo */
-        color: white !important;
-        border-radius: 8px !important;
-        position: fixed !important;
-        top: 15px !important;
-        left: 15px !important;
-        z-index: 9999999 !important;
-        padding: 8px !important;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
+        background-color: #007bff !important; /* Azul */
+        border-radius: 5px !important;
     }
     
-    /* Cambia el color del icono de la flecha a blanco para que se vea bien */
+    /* Forzamos el color de la flecha a blanco */
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: white !important;
-        color: white !important;
     }
 
-    /* 3. QUITAR EL MENÚ DE LA DERECHA Y EL FOOTER */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-
-    /* 4. AJUSTAR EL CONTENIDO PARA QUE NO QUEDE HUECO */
-    .block-container {
-        padding-top: 2rem !important;
-    }
+    /* 4. QUITAR EL PIE DE PÁGINA */
+    footer {visibility: hidden !important;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1596,6 +1588,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
