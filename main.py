@@ -53,45 +53,47 @@ st.markdown("""
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
+# --- LÓGICA DE LOGIN SIMPLIFICADA ---
 def validar_usuario(u, p):
-    import sqlite3
-    u = u.strip().lower() 
+    u = u.strip().lower()
     p = p.strip()
 
-    # 1. PUERTA DE EMERGENCIA (Usa esta para entrar ahora)
-    if u == "admin" and p == "oran2026": 
+    # 1. LLAVE MAESTRA (Física en el código, no usa base de datos)
+    if u == "admin" and p == "oran2026":
         return ("admin", "Admin")
 
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    
-    # 2. Búsqueda en la base de datos
-    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
-    resultado = cursor.fetchone()
-    conn.close()
-    return resultado
+    # 2. CONSULTA A LA BASE DE DATOS (Para el resto de usuarios)
+    import sqlite3
+    try:
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
+        res = cursor.fetchone()
+        conn.close()
+        return res
+    except:
+        return None
 
-# --- CONTROL DE ACCESO ---
+# --- INTERFAZ ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán - Ingreso")
-    u_ingresado = st.text_input("Usuario:").strip()
-    p_ingresado = st.text_input("Contraseña:", type="password")
+    st.title("🏥 Sistema APS Orán")
+    # Usamos keys únicas para evitar conflictos de caché
+    u_ing = st.text_input("Usuario", key="login_u").strip().lower()
+    p_ing = st.text_input("Contraseña", type="password", key="login_p").strip()
     
-    if st.button("Entrar"):
-        datos_usuario = validar_usuario(u_ingresado, p_ingresado)
-        if datos_usuario:
+    if st.button("Ingresar al Sistema"):
+        datos = validar_usuario(u_ing, p_ing)
+        if datos:
             st.session_state.autenticado = True
-            st.session_state.usuario_logueado = datos_usuario[0]
-            st.session_state.rol = datos_usuario[1]
-            st.success("¡Bienvenido!")
+            st.session_state.usuario_logueado = datos[0]
+            st.session_state.rol = datos[1]
             st.rerun()
         else:
-            st.error("❌ Credenciales incorrectas")
-    st.stop() # Aquí se detiene si NO está logueado
-
+            st.error("❌ Credenciales incorrectas. Pruebe con admin / oran2026")
+    st.stop()
 # --- TODO LO QUE SIGUE SOLO SE EJECUTA SI EL USUARIO YA ENTRÓ ---
 if st.session_state.autenticado:
     with st.sidebar:
@@ -1668,6 +1670,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
