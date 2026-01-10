@@ -51,51 +51,56 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-def main():
-    # 1. Configuración de página (Siempre lo primero)
-    if 'config_set' not in st.session_state:
-        st.set_page_config(page_title="APS Orán 2026", layout="wide")
-        st.session_state.config_set = True
+import streamlit as st
+import sqlite3
 
-    # 2. Inicializar DB (Asegura que las tablas existan)
+# 1. ESTO DEBE IR ARRIBA DE TODO para que el login lo encuentre
+def inicializar_db():
+    try:
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                usuario TEXT PRIMARY KEY, password TEXT, rol TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        pass
+
+# 2. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
+if 'config_set' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide")
+    st.session_state.config_set = True
+
+# 3. LÓGICA DE LOGIN (Reparada para que no salte al bloque 0)
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    st.title("🏥 Sistema APS Orán")
+    # Inicializamos la DB antes del login
     inicializar_db()
-
-    # 3. Estado de autenticación
-    if 'autenticado' not in st.session_state:
-        st.session_state.autenticado = False
-
-    # --- BLOQUE DE LOGIN DE EMERGENCIA ---
-    if not st.session_state.autenticado:
-        st.title("🏥 APS Orán - Control de Acceso")
-        
-        # Usamos llaves únicas (key) para forzar a Streamlit a refrescar los campos
-        u = st.text_input("Usuario", key="user_fix").strip().lower()
-        p = st.text_input("Contraseña", type="password", key="pass_fix").strip()
-        
-        if st.button("🔓 Ingresar"):
-            # VALIDACIÓN MAESTRA (Ignora cualquier error de la tabla usuarios)
-            if u == "admin" and (p == "123" or p == "oran2026"):
-                st.session_state.autenticado = True
-                st.session_state.usuario_logueado = "Administrador"
-                st.session_state.rol = "Admin"
-                st.success("¡Acceso concedido!")
-                st.rerun()
-            else:
-                st.error("❌ Usuario o clave no reconocidos por el sistema.")
-        
-        # EL STOP ES VITAL: Detiene el código aquí si no hay login.
-        # Esto es lo que evita el NameError y el AttributeError en la línea 150.
-        st.stop() 
-
-    # --- SI LLEGÓ AQUÍ, ESTÁ LOGUEADO ---
-    st.sidebar.success(f"Conectado: {st.session_state.usuario_logueado}")
     
-    menu = st.sidebar.radio("Menú Principal", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Gestión Usuario"])
+    u = st.text_input("Usuario", key="login_user").strip().lower()
+    p = st.text_input("Contraseña", type="password", key="login_pass").strip()
     
-    if menu == "🏠 Inicio":
-        bloque_0_inicio() # Aquí verás las alertas de vacunación del 07/01
-    elif menu == "⚙️ Gestión Usuario":
-        bloque_9_admin() # Aquí es donde pondremos el cambio de password
+    if st.button("Ingresar"):
+        # Acceso directo para evitar errores de conexión
+        if u == "admin" and (p == "123" or p == "oran2026"):
+            st.session_state.autenticado = True
+            st.session_state.usuario_logueado = "Administrador"
+            st.rerun()
+        else:
+            st.error("Credenciales incorrectas")
+    
+    # EL STOP ES LA CLAVE: Evita que Streamlit lea tus bloques 
+    # y te de el error de NameError o AttributeError antes de loguearte.
+    st.stop()
+
+# --- AQUÍ EMPIEZA TU CÓDIGO ORIGINAL (NO TOQUES NADA HACIA ABAJO) ---
+# Aquí es donde tienes tus st.sidebar, tus radio buttons y tus bloques.
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1582,6 +1587,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
