@@ -1,21 +1,20 @@
-# --- OCULTAR MENÚ DE GITHUB Y STREAMLIT ---
+import streamlit as st  # <--- ESTA DEBE SER LA LÍNEA 1
+import sqlite3
+import pandas as pd
+from datetime import datetime
+
+# AHORA SÍ, OCULTAMOS GITHUB (Línea 6 en adelante)
 st.markdown("""
     <style>
-    /* Oculta el botón de GitHub (el icono de gato) */
-    #MainMenu {visibility: hidden;}
-    
-    /* Oculta el encabezado superior (Deploy, GitHub, etc.) */
     header {visibility: hidden;}
-    
-    /* Oculta el pie de página "Made with Streamlit" */
+    #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* Elimina el margen superior para que se vea más limpio */
-    .block-container {
-        padding-top: 1rem;
-    }
     </style>
     """, unsafe_allow_html=True)
+
+# Lógica de seguridad (Login)
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -1563,6 +1562,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
