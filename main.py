@@ -7,43 +7,47 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. TAPA EL LOGO DE GITHUB CON UNA BARRA BLANCA */
-    /* Creamos un bloque que se pone encima de la esquina derecha */
-    header[data-testid="stHeader"]::before {
-        content: "";
-        position: absolute;
-        right: 0;
-        width: 150px; /* Ancho suficiente para tapar Deploy y GitHub */
-        height: 60px;
-        background-color: white; /* Cambia a #f0f2f6 si usas el tema oscuro */
-        z-index: 999;
+    /* 1. ANULAR EL LINK DE GITHUB POR SU DIRECCIÓN */
+    header a[href*="github.com"] {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important; /* Esto hace que no se pueda hacer clic */
+        width: 0 !important;
+        height: 0 !important;
     }
 
-    /* 2. OCULTAMOS EL MENÚ DE LAS 3 RAYAS Y EL FOOTER */
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
+    /* 2. OCULTAR TODO EL CONTENIDO DEL HEADER EXCEPTO LA FLECHA */
+    /* Esto crea una zona muerta donde estaba el logo */
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+        pointer-events: none !important; /* Nadie puede cliquear el header */
+    }
 
-    /* 3. RESCATAMOS LA FLECHITA (Botón Lateral) */
-    /* La sacamos del encabezado para que no la tape nada */
+    /* 3. RESCATAR Y DAR VIDA A LA FLECHITA (BOTÓN AZUL) */
+    /* Le devolvemos el clic solo a la flecha */
     [data-testid="stSidebarCollapsedControl"] {
         visibility: visible !important;
         display: flex !important;
-        background-color: #007bff !important; /* Azul llamativo */
+        pointer-events: auto !important; /* Habilita el clic solo aquí */
+        background-color: #007bff !important; 
         color: white !important;
         border-radius: 8px !important;
         position: fixed !important;
         top: 10px !important;
         left: 10px !important;
-        z-index: 1000000 !important;
+        z-index: 9999999 !important;
         padding: 5px !important;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
     }
 
-    /* Forzamos el color blanco de la flecha */
+    /* Forzamos que la flecha sea blanca */
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: white !important;
         color: white !important;
     }
+
+    /* 4. LIMPIEZA EXTRA */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1596,6 +1600,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
