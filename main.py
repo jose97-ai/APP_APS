@@ -53,45 +53,43 @@ st.markdown("""
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
-# --- LÓGICA DE LOGIN PARA APS ORÁN ---
-def validar_usuario(u, p):
-    u = u.strip().lower()
-    p = p.strip()
+# --- INTERFAZ DE LOGIN ---
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
 
-    # LLAVE MAESTRA SIMPLIFICADA (Para recuperar el control ahora)
-    if u == "admin" and (p == "oran2026" or p == "123"):
-        return ("admin", "Admin")
-
-    # Búsqueda en base de datos para otros usuarios
-    try:
-        import sqlite3
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
-        res = cursor.fetchone()
-        conn.close()
-        return res
-    except:
-        return None
-
-# --- INTERFAZ ---
-if not st.session_state.get('autenticado', False):
+if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán - Gestión")
     
-    # IMPORTANTE: Cambié el nombre de los campos para forzar al navegador a borrar lo anterior
-    user_input = st.text_input("Ingresa tu Usuario:", key="usr_final").strip().lower()
-    pass_input = st.text_input("Ingresa tu Clave:", type="password", key="pwd_final").strip()
+    # Usamos etiquetas nuevas para forzar al navegador a limpiar
+    user_final = st.text_input("Usuario Principal:", key="u_final").strip().lower()
+    pass_final = st.text_input("Clave de Acceso:", type="password", key="p_final").strip()
     
-    if st.button("🔓 Acceder al Sistema"):
-        datos = validar_usuario(user_input, pass_input)
-        if datos:
+    if st.button("🔓 Entrar ahora"):
+        # VALIDACIÓN DIRECTA (Sin funciones externas)
+        if user_final == "admin" and (pass_final == "123" or pass_final == "oran2026"):
             st.session_state.autenticado = True
-            st.session_state.usuario_logueado = datos[0]
-            st.session_state.rol = datos[1]
-            st.success("¡Bienvenido!")
+            st.session_state.usuario_logueado = "admin"
+            st.session_state.rol = "Admin"
+            st.success("¡Acceso total concedido!")
             st.rerun()
         else:
-            st.error(f"❌ Acceso denegado para: {user_input}")
+            # Si no es admin, intentamos buscar en la base de datos
+            try:
+                import sqlite3
+                conn = sqlite3.connect('aps_oran_final.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (user_final, pass_final))
+                res = cursor.fetchone()
+                conn.close()
+                if res:
+                    st.session_state.autenticado = True
+                    st.session_state.usuario_logueado = res[0]
+                    st.session_state.rol = res[1]
+                    st.rerun()
+                else:
+                    st.error(f"❌ Datos incorrectos para: {user_final}")
+            except:
+                st.error("Error de conexión a la base de datos.")
     st.stop()
 # --- TODO LO QUE SIGUE SOLO SE EJECUTA SI EL USUARIO YA ENTRÓ ---
 if st.session_state.autenticado:
@@ -1669,6 +1667,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
