@@ -55,11 +55,19 @@ st.markdown("""
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
 def validar_usuario(u, p):
     import sqlite3
+    # 1. Limpieza total de los datos ingresados
+    u = u.strip().lower() 
+    p = p.strip()
+
+    # 2. PUERTA DE EMERGENCIA (Usa esto si nada funciona)
+    if u == "admin" and p == "oran2026": 
+        return ("admin", "Admin")
+
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # Usamos LOWER para que no importe si escriben Admin o admin
-    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND password = ?", (u, p))
+    # 3. Búsqueda flexible en la base de datos
+    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
     resultado = cursor.fetchone()
     conn.close()
     return resultado
@@ -1661,6 +1669,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
