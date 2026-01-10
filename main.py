@@ -51,76 +51,50 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-import sqlite3
-
-# 1. ESTO DEBE IR PRIMERO: Definir la función antes de que el main la llame
-def inicializar_db():
-    try:
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                usuario TEXT PRIMARY KEY, 
-                password TEXT, 
-                rol TEXT
-            )
-        """)
-        # Insertar admin por defecto si no existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.error(f"Error de base de datos: {e}")
-
-# 2. LUEGO EL LOGIN (Separado para no ensuciar el main)
-def login_sistema():
-    st.title("🏥 Sistema APS Orán 2026")
-    u = st.text_input("Usuario", key="user").strip().lower()
-    p = st.text_input("Contraseña", type="password", key="pass").strip()
-    
-    if st.button("Ingresar"):
-        # Llave maestra que definimos
-        if u == "admin" and (p == "123" or p == "oran2026"):
-            st.session_state.autenticado = True
-            st.session_state.usuario_logueado = "Administrador"
-            st.rerun()
-        else:
-            st.error("Credenciales incorrectas")
-    return False
-
-# 3. LA FUNCIÓN MAIN QUE ORQUESTA TODO
 def main():
-    # Configuración de página
+    # 1. Configuración de la página (Siempre al principio)
     if 'config_set' not in st.session_state:
         st.set_page_config(page_title="APS Orán 2026", layout="wide")
         st.session_state.config_set = True
 
-    # Ahora inicializar_db() SI EXISTE porque la definimos arriba
+    # 2. Inicializar base de datos (se abre y cierra sola)
     inicializar_db()
 
+    # 3. Control de Sesión
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
 
-    # Control de acceso
+    # --- NUEVA LÓGICA DE LOGIN (REPARADA) ---
     if not st.session_state.autenticado:
-        login_sistema()
-        st.stop() # <--- ESTO EVITA QUE SALTE EL ERROR EN EL BLOQUE 0
+        st.title("🏥 Sistema APS Orán")
+        
+        # Usamos un contenedor para limpiar la interfaz
+        u = st.text_input("Usuario", key="u_login").strip().lower()
+        p = st.text_input("Contraseña", type="password", key="p_login").strip()
+        
+        if st.button("Ingresar", use_container_width=True):
+            # Validación directa para evitar fallos de conexión en el login
+            if u == "admin" and (p == "123" or p == "oran2026"):
+                st.session_state.autenticado = True
+                st.session_state.usuario_logueado = "Administrador"
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
+        
+        # ESTA ES LA CLAVE: Si no está autenticado, detiene TODO el script aquí.
+        # Así evitamos que se llame a bloque_0_inicio() en la línea 117.
+        st.stop() 
 
-    # --- SI LLEGÓ AQUÍ, ESTÁ ADENTRO ---
-    st.sidebar.title(f"👤 {st.session_state.usuario_logueado}")
-    menu = st.sidebar.radio("Menú", ["🏠 Inicio", "⚙️ Admin"])
+    # --- SI LLEGÓ AQUÍ, EL LOGIN FUE EXITOSO ---
+    # Ya no hay riesgo de NameError porque el flujo es lineal
+    st.sidebar.title(f"Bienvenido {st.session_state.usuario_logueado}")
     
+    menu = st.sidebar.radio("Menú", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
+
     if menu == "🏠 Inicio":
-        bloque_0_inicio()
+        bloque_0_inicio() # Ahora sí cargará con las alertas de vacunación del 07/01
     elif menu == "⚙️ Admin":
         bloque_9_admin()
-
-# 4. EJECUCIÓN FINAL
-if __name__ == "__main__":
-    main()
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1607,6 +1581,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
