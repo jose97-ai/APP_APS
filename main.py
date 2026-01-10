@@ -53,17 +53,16 @@ st.markdown("""
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
-# --- LÓGICA DE LOGIN RADICAL ---
+# --- LÓGICA DE LOGIN PARA APS ORÁN ---
 def validar_usuario(u, p):
-    # Forzamos minúsculas y quitamos espacios
     u = u.strip().lower()
     p = p.strip()
 
-    # PRIORIDAD 1: Si esto no funciona, el problema es el navegador/caché
-    if u == "admin" and p == "oran2026":
+    # LLAVE MAESTRA SIMPLIFICADA (Para recuperar el control ahora)
+    if u == "admin" and (p == "oran2026" or p == "123"):
         return ("admin", "Admin")
 
-    # PRIORIDAD 2: Base de datos
+    # Búsqueda en base de datos para otros usuarios
     try:
         import sqlite3
         conn = sqlite3.connect('aps_oran_final.db')
@@ -76,27 +75,23 @@ def validar_usuario(u, p):
         return None
 
 # --- INTERFAZ ---
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán")
-    st.info("ℹ️ Versión de Seguridad 2.1 (09/01/2026)") # Esto te confirmará que el código cambió
+if not st.session_state.get('autenticado', False):
+    st.title("🏥 Sistema APS Orán - Gestión")
     
-    u_ing = st.text_input("Usuario", key="u_login").strip().lower()
-    p_ing = st.text_input("Contraseña", type="password", key="p_login").strip()
+    # IMPORTANTE: Cambié el nombre de los campos para forzar al navegador a borrar lo anterior
+    user_input = st.text_input("Ingresa tu Usuario:", key="usr_final").strip().lower()
+    pass_input = st.text_input("Ingresa tu Clave:", type="password", key="pwd_final").strip()
     
-    if st.button("🚀 Ingresar"):
-        datos = validar_usuario(u_ing, p_ing)
+    if st.button("🔓 Acceder al Sistema"):
+        datos = validar_usuario(user_input, pass_input)
         if datos:
             st.session_state.autenticado = True
             st.session_state.usuario_logueado = datos[0]
             st.session_state.rol = datos[1]
-            st.success("¡Acceso concedido!")
+            st.success("¡Bienvenido!")
             st.rerun()
         else:
-            # Mensaje detallado para saber qué recibió el sistema
-            st.error(f"❌ Error. Intentaste entrar con: {u_ing}")
+            st.error(f"❌ Acceso denegado para: {user_input}")
     st.stop()
 # --- TODO LO QUE SIGUE SOLO SE EJECUTA SI EL USUARIO YA ENTRÓ ---
 if st.session_state.autenticado:
@@ -1674,6 +1669,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
