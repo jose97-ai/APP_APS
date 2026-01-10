@@ -7,35 +7,38 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. BORRAR EL LOGO DE GITHUB Y EL BOTÓN DE DEPLOY ESPECÍFICAMENTE */
-    /* Buscamos por el atributo de accesibilidad para no fallar */
-    [data-testid="stStatusWidget"], 
-    .stAppDeployButton, 
-    header a[href*="github.com"], 
-    header svg[class*="github"] {
+    /* 1. ATACAMOS EL LOGO DE GITHUB POR SU ICONO (SVG) */
+    /* Esto lo hace invisible y le quita el tamaño sin romper el header */
+    header a svg {
         display: none !important;
-        visibility: hidden !important;
-    }
-
-    /* 2. OCULTAR EL MENÚ DE LAS 3 RAYAS (DERECHA) */
-    #MainMenu {visibility: hidden !important;}
-
-    /* 3. ASEGURAR QUE EL BOTÓN DE LA BARRA LATERAL (IZQUIERDA) SEA VISIBLE */
-    /* Le damos un color fuerte para confirmar que está ahí */
-    [data-testid="stSidebarCollapsedControl"] {
-        visibility: visible !important;
-        display: flex !important;
-        background-color: #007bff !important; /* Azul */
-        border-radius: 5px !important;
     }
     
-    /* Forzamos el color de la flecha a blanco */
-    [data-testid="stSidebarCollapsedControl"] svg {
-        fill: white !important;
+    /* 2. OCULTAMOS EL BOTÓN DE DEPLOY (SI APARECE) */
+    .stAppDeployButton {
+        display: none !important;
     }
 
-    /* 4. QUITAR EL PIE DE PÁGINA */
-    footer {visibility: hidden !important;}
+    /* 3. RESCATAMOS LA FLECHITA Y LA PERSONALIZAMOS */
+    [data-testid="stSidebarCollapsedControl"] {
+        background-color: #007bff !important; /* Azul para identificarla */
+        color: white !important;
+        border-radius: 5px !important;
+        margin-left: 10px !important;
+        margin-top: 5px !important;
+        visibility: visible !important;
+        display: flex !important;
+    }
+
+    /* Aseguramos que la flecha dentro del botón sea blanca */
+    [data-testid="stSidebarCollapsedControl"] svg {
+        display: block !important;
+        fill: white !important;
+        color: white !important;
+    }
+
+    /* 4. OCULTAMOS EL MENÚ DE LAS 3 RAYAS Y EL FOOTER */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1588,6 +1591,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
