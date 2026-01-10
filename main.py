@@ -53,6 +53,12 @@ st.markdown("""
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
 # --- CONTROL DE ACCESO (LOGIN) ---
+# Lógica de seguridad (Login)
+# --- 1. PRIMERO LAS FUNCIONES (Asegúrate que estén arriba de este bloque) ---
+# def inicializar_db(): ... (tu código original)
+# def conectar_y_reparar(): ... (tu código original)
+
+# --- 2. LUEGO EL LOGIN (Reparado para reconocer usuarios y cerrar sesión) ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
@@ -65,7 +71,8 @@ if not st.session_state.autenticado:
         p = st.text_input("Contraseña", type="password").strip()
         
         if st.form_submit_button("Ingresar"):
-            # 1. Intento por Base de Datos (Para otros usuarios)
+            # Consulta simple a la DB para validar otros usuarios
+            user_db = None
             try:
                 conn = sqlite3.connect('aps_oran_final.db')
                 cursor = conn.cursor()
@@ -73,9 +80,9 @@ if not st.session_state.autenticado:
                 user_db = cursor.fetchone()
                 conn.close()
             except:
-                user_db = None
+                pass
 
-            # 2. Validación (Emergencia + Base de Datos)
+            # Validación de entrada
             if (u == "admin" and p == "123") or (u == "supervisor" and p == "oran2026") or user_db:
                 st.session_state.autenticado = True
                 st.session_state.usuario_actual = u
@@ -83,12 +90,68 @@ if not st.session_state.autenticado:
             else:
                 st.error("Credenciales incorrectas")
     
-    st.stop() 
+    st.stop() # Bloquea el resto del archivo hasta loguear
 
-# --- BOTÓN CERRAR SESIÓN (En la barra lateral) ---
-if st.sidebar.button("Log out / Cerrar Sesión"):
+# --- 3. BOTÓN CERRAR SESIÓN ---
+# Se muestra arriba de tu menú lateral
+if st.sidebar.button("🚪 Cerrar Sesión"):
     st.session_state.autenticado = False
     st.rerun()
+
+# --- A PARTIR DE AQUÍ SIGUE TU CÓDIGO ORIGINAL SIN CAMBIOS --- 
+
+# --- A PARTIR DE AQUÍ SOLO LLEGA EL QUE SE LOGUEÓ ---
+# Esta función es la que el Bloque 7 (y otros) está reclamando
+def conectar_y_reparar():
+    """Función de conexión exigida por los bloques originales"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    # Configuramos para que las consultas devuelvan diccionarios si es necesario
+    conn.row_factory = sqlite3.Row 
+    return conn
+
+# También definimos obtener_conexion por si otros bloques usan ese nombre
+def obtener_conexion():
+    return conectar_y_reparar()
+import streamlit as st
+import pandas as pd
+import sqlite3
+import hashlib
+from datetime import datetime, date, timedelta
+def obtener_ronda_info():
+    """Retorna la ronda actual y el año para los formularios (Línea 206)"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    try:
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+        cursor.execute("SELECT valor FROM config WHERE clave = 'ronda_actual'")
+        ronda = cursor.fetchone()
+        return (ronda[0] if ronda else "1"), 2026
+    except:
+        return "1", 2026
+    finally:
+        conn.close()
+
+def obtener_conexion():
+    """Función de conexión estándar para todos los bloques"""
+    return sqlite3.connect('aps_oran_final.db')
+# --- 1. CONFIGURACIÓN ÚNICA ---
+# Evita que se ejecute la configuración más de una vez
+if 'config_lista' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
+    st.session_state.config_lista = True
+
+# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN ---
+def inicializar_db():
+    """Función unificada para evitar el NameError"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Crear tablas base
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)")
+    conn.commit()
+    return conn
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1575,6 +1638,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
