@@ -145,62 +145,47 @@ def inicializar_db():
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
 def bloque_0_inicio():
-    import sqlite3
-    import pandas as pd
-    import plotly.express as px
-
-    conn = None
+    st.title("🏠 Sistema APS Orán - Inicio")
+    conn = inicializar_db()
+    
     try:
-        # 1. Conexión Segura
-        conn = sqlite3.connect('aps_oran_final.db')
+        # Métricas principales
+        p_res = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
+        v_res = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
         
-        st.header("🏠 Panel de Control - APS Orán 2026")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Población", f"{p_res} pers.")
+        c2.metric("Viviendas", v_res)
+        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
 
-        # --- SECCIÓN 1: ALERTAS (Pedido 07/01) ---
+        st.divider()
+
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.subheader("💉 Alertas de Vacunación")
-            try:
-                df_alertas = pd.read_sql("SELECT nombre, apellido, proxima_dosis FROM niños WHERE proxima_dosis < DATE('now')", conn)
-                if not df_alertas.empty:
-                    st.error(f"Hay {len(df_alertas)} niños con dosis atrasadas")
-                    st.dataframe(df_alertas, use_container_width=True)
-                else:
-                    st.success("✅ Calendarios al día")
-            except:
-                st.info("Tabla de niños no detectada aún.")
+            st.subheader("🚩 Riesgo Habitacional")
+            df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
+            if not df_r.empty:
+                st.error(f"Hay {len(df_r)} viviendas en riesgo crítico.")
+                st.dataframe(df_r, use_container_width=True)
+            else:
+                st.success("✅ Sin riesgos críticos detectados.") # Asegúrate de que tenga los ()
 
         with col2:
-            st.subheader("📊 Resumen General")
-            # Aquí recuperamos tus métricas rápidas
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM censo") # Cambia 'censo' por el nombre de tu tabla
-            total_censados = cursor.fetchone()[0]
-            st.metric("Total Personas Censadas", total_censados)
-
-        # --- SECCIÓN 2: GRÁFICAS RECUPERADAS ---
-        st.divider()
-        st.subheader("📈 Estadísticas de Población")
-
-        # Recuperamos la gráfica de barras o sectores que tenías
-        # Ejemplo de gráfica por género/edad (ajusta los nombres de tus columnas)
-        df_grafica = pd.read_sql("SELECT genero, COUNT(*) as cantidad FROM censo GROUP BY genero", conn)
-        
-        if not df_grafica.empty:
-            fig = px.bar(df_grafica, x='genero', y='cantidad', title="Población por Género", color='genero')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # --- SECCIÓN 3: TU OTRA GRÁFICA (Pirámide o Rangos Etarios) ---
-        # (Aquí puedes pegar el código específico de la gráfica que se te borró)
-
+            st.subheader("👶 Alerta Vacunación (<5 años)")
+            limite = (date.today() - timedelta(days=5*365)).isoformat()
+            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
+            df_v = pd.read_sql(query, conn)
+            
+            if not df_v.empty:
+                st.warning(f"Hay {len(df_v)} niños con vacunas pendientes.")
+                st.dataframe(df_v, use_container_width=True)
+            else:
+                st.success("✅ Todos los niños están al día.") # Asegúrate de que tenga los ()
     except Exception as e:
-        st.error(f"⚠️ Error al cargar el Dashboard: {e}")
-    
+        st.error(f"Error al cargar datos: {e}")
     finally:
-        # ESTO ES LO QUE EVITA EL ERROR QUE TENÍAMOS:
-        if conn is not None:
-            conn.close()
+        conn.close()
+        # Aquí sigue tu código original del Bloque 1
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1642,6 +1627,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
