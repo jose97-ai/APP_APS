@@ -85,12 +85,11 @@ if not st.session_state.get('autenticado', False):
     st.stop() # IMPORTANTE: Detiene la app si no está logueado
 # --- PEGA ESTO AQUÍ (AL FINAL DE LA BARRA LATERAL) ---
     st.write("---") # Línea divisoria
+       st.write("---") 
         if st.button("🚪 Cerrar Sesión", use_container_width=True):
-            # Borramos la sesión
             st.session_state.autenticado = False
             st.session_state.usuario_logueado = None
             st.session_state.rol = None
-            # Forzamos reinicio para volver al login
             st.rerun()
 # 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
 if 'config_set' not in st.session_state:
@@ -1657,6 +1656,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
