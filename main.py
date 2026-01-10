@@ -54,56 +54,56 @@ st.markdown("""
 import streamlit as st
 import sqlite3
 
-# --- 1. CONFIGURACIÓN (OBLIGATORIO AL PRINCIPIO) ---
-st.set_page_config(page_title="APS Orán 2026", layout="wide")
+# 1. DEFINICIÓN DE FUNCIONES (Primero definimos, luego usamos)
+def inicializar_db():
+    try:
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                usuario TEXT PRIMARY KEY, 
+                password TEXT, 
+                rol TEXT
+            )
+        """)
+        # Insertar admin por defecto si la tabla está vacía
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"Error al inicializar base de datos: {e}")
 
-# --- 2. INICIALIZACIÓN DE SESIÓN ---
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-
-# --- 3. EL LOGIN DEFINITIVO (SIN FORMULARIOS PARA EVITAR ERRORES) ---
-if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán 2026")
-    st.info("ℹ️ Si el login falla, use: admin / 123")
+# 2. FUNCIÓN PRINCIPAL main()
+def main():
+    # Configuración de página DEBE ir dentro de main o al principio del archivo
+    st.set_page_config(page_title="APS Orán 2026", layout="wide")
     
-    u = st.text_input("Usuario", key="u_final").strip().lower()
-    p = st.text_input("Contraseña", type="password", key="p_final").strip()
-    
-    if st.button("🔓 Acceder"):
-        # PRUEBA DE FUERZA BRUTA
-        if u == "admin" and (p == "123" or p == "oran2026"):
-            st.session_state.autenticado = True
-            st.session_state.usuario_logueado = "Administrador"
-            st.session_state.rol = "Admin"
-            st.rerun()
-        else:
-            # INTENTO POR BASE DE DATOS
-            try:
-                conn = sqlite3.connect('aps_oran_final.db')
-                cursor = conn.cursor()
-                cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
-                res = cursor.fetchone()
-                conn.close()
-                if res:
-                    st.session_state.autenticado = True
-                    st.session_state.usuario_logueado = res[0]
-                    st.session_state.rol = res[1]
-                    st.rerun()
-                else:
-                    st.error(f"❌ Credenciales incorrectas. El sistema leyó: {u}")
-            except:
-                st.error("Error de base de datos")
-    st.stop() # DETIENE TODO AQUÍ HASTA QUE SE LOGUEE
+    # Ahora sí podemos llamarla porque ya está definida arriba
+    inicializar_db()
 
-# --- 4. BARRA LATERAL (SOLO SI YA ENTRÓ) ---
-with st.sidebar:
-    st.title(f"👤 {st.session_state.get('usuario_logueado', 'Usuario')}")
-    menu = st.radio("Menú Principal:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
-    st.write("---")
-    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+    if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
-        st.rerun()
 
+    # --- LÓGICA DE LOGIN ---
+    if not st.session_state.autenticado:
+        st.title("🏥 Sistema APS Orán")
+        u = st.text_input("Usuario").strip().lower()
+        p = st.text_input("Contraseña", type="password").strip()
+        
+        if st.button("Ingresar"):
+            if u == "admin" and (p == "123" or p == "oran2026"):
+                st.session_state.autenticado = True
+                st.session_state.usuario_logueado = "admin"
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
+        st.stop()
+
+    # --- RESTO DE LA APP (Menú, Bloques, etc.) ---
+    st.sidebar.title(f"Bienvenido {st.session_state.usuario_logueado}")
+    # ... resto de tu código ...
 # --- A PARTIR DE AQUÍ SIGUE TU CÓDIGO DE BLOQUES ---
 # A partir de aquí sigue el resto de tu código (bloque_0_inicio, etc.)
 def bloque_0_inicio():
@@ -1589,6 +1589,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
