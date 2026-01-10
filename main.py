@@ -1742,21 +1742,39 @@ def bloque_12_centro_datos():
 # NAVEGACION
 # ==========================================
 def main():
+    # 1. Siempre inicializar la base de datos primero
     inicializar_db() 
     
+    # 2. Configurar la barra lateral
     st.sidebar.title("🏥 APS Orán 2026")
+    st.sidebar.write(f"Usuario: **{st.session_state.get('usuario_actual', 'Invitado')}**")
     
-    # Agregamos la opción 12 a tu lista original
+    # 3. LISTA DE OPCIONES (Asegúrate que el texto coincida exactamente abajo)
     opciones = [
-        "🏠 Inicio", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
-        "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
-        "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
-        "🚨 11. Vigilancia Epidemiológica", "🗄️ 12. Centro de Datos"
+        "🏠 Inicio", 
+        "📝 1. Censo", 
+        "🤰 2. Embarazadas", 
+        "🏠 3. Viviendas",
+        "💉 4. Vacunación", 
+        "🍎 5. Nutrición", 
+        "🦠 6. TBC", 
+        "📊 7. Estadísticas",
+        "👥 8. Seguimiento Agentes", 
+        "⚙️ 9. Admin", 
+        "🚀 10. Gestión Avanzada", 
+        "🚨 11. Vigilancia Epidemiológica", 
+        "🗄️ 12. Centro de Datos"  # <-- ESTA LÍNEA ES LA NUEVA
     ]
     
-    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_aps_final")
+    # Usamos un índice dinámico para evitar errores de refresco
+    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_aps_2026_v2")
 
-    # --- NAVEGACIÓN ---
+    st.sidebar.divider()
+    if st.sidebar.button("🚪 Cerrar Sesión"):
+        st.session_state.autenticado = False
+        st.rerun()
+
+    # --- LÓGICA DE NAVEGACIÓN (Nombres exactos) ---
     if seleccion == "🏠 Inicio":
         bloque_0_inicio()
 
@@ -1793,10 +1811,11 @@ def main():
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
         bloque_11_vigilancia_epidemiologica()
     
-    # NUEVO: Navegación al Bloque 12
+    # ESTE ES EL DISPARADOR DEL BLOQUE 12
     elif seleccion == "🗄️ 12. Centro de Datos":
         bloque_12_centro_datos()
 
+# No olvides cerrar el archivo con esto:
 if __name__ == "__main__":
     main()
 
