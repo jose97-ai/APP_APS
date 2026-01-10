@@ -7,38 +7,43 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. ATACAMOS EL LOGO DE GITHUB POR SU ICONO (SVG) */
-    /* Esto lo hace invisible y le quita el tamaño sin romper el header */
-    header a svg {
-        display: none !important;
-    }
-    
-    /* 2. OCULTAMOS EL BOTÓN DE DEPLOY (SI APARECE) */
-    .stAppDeployButton {
-        display: none !important;
+    /* 1. TAPA EL LOGO DE GITHUB CON UNA BARRA BLANCA */
+    /* Creamos un bloque que se pone encima de la esquina derecha */
+    header[data-testid="stHeader"]::before {
+        content: "";
+        position: absolute;
+        right: 0;
+        width: 150px; /* Ancho suficiente para tapar Deploy y GitHub */
+        height: 60px;
+        background-color: white; /* Cambia a #f0f2f6 si usas el tema oscuro */
+        z-index: 999;
     }
 
-    /* 3. RESCATAMOS LA FLECHITA Y LA PERSONALIZAMOS */
+    /* 2. OCULTAMOS EL MENÚ DE LAS 3 RAYAS Y EL FOOTER */
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+
+    /* 3. RESCATAMOS LA FLECHITA (Botón Lateral) */
+    /* La sacamos del encabezado para que no la tape nada */
     [data-testid="stSidebarCollapsedControl"] {
-        background-color: #007bff !important; /* Azul para identificarla */
-        color: white !important;
-        border-radius: 5px !important;
-        margin-left: 10px !important;
-        margin-top: 5px !important;
         visibility: visible !important;
         display: flex !important;
+        background-color: #007bff !important; /* Azul llamativo */
+        color: white !important;
+        border-radius: 8px !important;
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 1000000 !important;
+        padding: 5px !important;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
     }
 
-    /* Aseguramos que la flecha dentro del botón sea blanca */
+    /* Forzamos el color blanco de la flecha */
     [data-testid="stSidebarCollapsedControl"] svg {
-        display: block !important;
         fill: white !important;
         color: white !important;
     }
-
-    /* 4. OCULTAMOS EL MENÚ DE LAS 3 RAYAS Y EL FOOTER */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1591,6 +1596,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
