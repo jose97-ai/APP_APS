@@ -152,37 +152,59 @@ login()
 # =========================================================
 def bloque_0_inicio():
     import sqlite3
-    conn = None  # Inicializamos en None para evitar el error de 'NoneType'
-    
+    import pandas as pd
+    import plotly.express as px
+
+    conn = None
     try:
-        # Abrimos la conexión propia del bloque
+        # 1. Conexión Segura
         conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
         
         st.header("🏠 Panel de Control - APS Orán 2026")
 
-        # --- SECCIÓN DE ALERTAS DE VACUNACIÓN (Pedido 07/01) ---
-        st.subheader("⚠️ Alertas de Vacunación")
+        # --- SECCIÓN 1: ALERTAS (Pedido 07/01) ---
+        col1, col2 = st.columns(2)
         
-        # Verificamos si la tabla existe antes de consultar
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='niños'")
-        if cursor.fetchone():
-            cursor.execute("SELECT nombre, apellido, proxima_dosis FROM niños WHERE proxima_dosis < DATE('now')")
-            atrasados = cursor.fetchall()
-            
-            if atrasados:
-                for n in atrasados:
-                    st.error(f"💉 Vacuna pendiente: {n[0]} {n[1]} (Venció: {n[2]})")
-            else:
-                st.success("✅ Calendarios de vacunación al día.")
-        else:
-            st.info("ℹ️ No hay datos de niños registrados para alertas.")
+        with col1:
+            st.subheader("💉 Alertas de Vacunación")
+            try:
+                df_alertas = pd.read_sql("SELECT nombre, apellido, proxima_dosis FROM niños WHERE proxima_dosis < DATE('now')", conn)
+                if not df_alertas.empty:
+                    st.error(f"Hay {len(df_alertas)} niños con dosis atrasadas")
+                    st.dataframe(df_alertas, use_container_width=True)
+                else:
+                    st.success("✅ Calendarios al día")
+            except:
+                st.info("Tabla de niños no detectada aún.")
+
+        with col2:
+            st.subheader("📊 Resumen General")
+            # Aquí recuperamos tus métricas rápidas
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM censo") # Cambia 'censo' por el nombre de tu tabla
+            total_censados = cursor.fetchone()[0]
+            st.metric("Total Personas Censadas", total_censados)
+
+        # --- SECCIÓN 2: GRÁFICAS RECUPERADAS ---
+        st.divider()
+        st.subheader("📈 Estadísticas de Población")
+
+        # Recuperamos la gráfica de barras o sectores que tenías
+        # Ejemplo de gráfica por género/edad (ajusta los nombres de tus columnas)
+        df_grafica = pd.read_sql("SELECT genero, COUNT(*) as cantidad FROM censo GROUP BY genero", conn)
+        
+        if not df_grafica.empty:
+            fig = px.bar(df_grafica, x='genero', y='cantidad', title="Población por Género", color='genero')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # --- SECCIÓN 3: TU OTRA GRÁFICA (Pirámide o Rangos Etarios) ---
+        # (Aquí puedes pegar el código específico de la gráfica que se te borró)
 
     except Exception as e:
-        st.error(f"Error al cargar el Dashboard: {e}")
+        st.error(f"⚠️ Error al cargar el Dashboard: {e}")
     
     finally:
-        # ESTA ES LA LÍNEA 193 CORREGIDA: Solo cierra si conn existe
+        # ESTO ES LO QUE EVITA EL ERROR QUE TENÍAMOS:
         if conn is not None:
             conn.close()
 # ==========================================
@@ -1626,6 +1648,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
