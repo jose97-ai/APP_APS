@@ -35,6 +35,40 @@ st.markdown("""
         z-index: 1000000;
     }
     </style>
+    """, unsafe_allow_html=True)st.markdown("""
+    <style>
+    /* 1. OCULTA EL HEADER COMPLETO (Esto quita GitHub, Deploy y la franja blanca) */
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0% !important;
+    }
+
+    /* 2. REAPARECE SOLO EL BOTÓN DE LA BARRA LATERAL (La flechita) */
+    /* Lo movemos un poco y le damos color para que no dependa del header oculto */
+    [data-testid="stSidebarCollapsedControl"] {
+        visibility: visible !important;
+        background-color: #007bff !important; /* Azul APS */
+        color: white !important;
+        border-radius: 8px !important;
+        position: fixed !important;
+        top: 15px !important;
+        left: 15px !important;
+        z-index: 9999999;
+        padding: 5px !important;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+    }
+
+    /* 3. QUITA EL MENÚ DE LAS 3 RAYAS (Para que nadie vea el código) */
+    #MainMenu {visibility: hidden;}
+    
+    /* 4. QUITA EL PIE DE PÁGINA */
+    footer {visibility: hidden;}
+
+    /* 5. AJUSTA EL CUERPO DE LA APP PARA QUE NO QUEDE UN HUECO ARRIBA */
+    .stApp {
+        margin-top: -60px;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
 # Lógica de seguridad (Login)
@@ -1587,6 +1621,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
