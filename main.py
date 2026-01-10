@@ -51,50 +51,46 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-# --- 1. CONTROL DE ACCESO (REEMPLAZA TU LOGIN ACTUAL) ---
+# --- REINICIO DE ACCESO TOTAL ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán 2026")
+    st.title("🏥 APS Orán - Recuperación de Acceso")
     
-    # Usamos llaves únicas para los inputs
-    u_ingreso = st.text_input("Usuario:", key="ingreso_u").strip().lower()
-    p_ingreso = st.text_input("Contraseña:", type="password", key="ingreso_p").strip()
+    # Usamos llaves nuevas para limpiar la memoria del navegador
+    user_final = st.text_input("Usuario:", key="u_final_fix").strip().lower()
+    pass_final = st.text_input("Contraseña:", type="password", key="p_final_fix").strip()
     
-    if st.button("🔓 Acceder al Sistema"):
-        # VALIDACIÓN MAESTRA (Hardcoded para evitar errores de DB en el login)
-        if u_ingreso == "admin" and (p_ingreso == "123" or p_ingreso == "oran2026"):
+    if st.button("🔓 Entrar al Sistema"):
+        # VALIDACIÓN DIRECTA (Sin base de datos para el admin)
+        if user_final == "admin" and (pass_final == "123" or pass_final == "oran2026"):
             st.session_state.autenticado = True
             st.session_state.usuario_logueado = "Administrador"
             st.session_state.rol = "Admin"
+            st.success("¡Acceso concedido!")
             st.rerun()
         else:
-            # Validación secundaria por base de datos
+            # Si no es admin, intentamos DB como último recurso
             try:
                 import sqlite3
-                conn_login = sqlite3.connect('aps_oran_final.db')
-                cursor_login = conn_login.cursor()
-                cursor_login.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u_ingreso, p_ingreso))
-                resultado = cursor_login.fetchone()
-                conn_login.close() # CERRAMOS AQUÍ MISMO
-                
-                if resultado:
+                conn = sqlite3.connect('aps_oran_final.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (user_final, pass_final))
+                res = cursor.fetchone()
+                conn.close()
+                if res:
                     st.session_state.autenticado = True
-                    st.session_state.usuario_logueado = resultado[0]
-                    st.session_state.rol = resultado[1]
+                    st.session_state.usuario_logueado = res[0]
+                    st.session_state.rol = res[1]
                     st.rerun()
                 else:
-                    st.error("❌ Credenciales incorrectas")
+                    st.error(f"❌ Error: El sistema recibió '{user_final}' / '{pass_final}'")
             except:
-                st.error("⚠️ Error de comunicación con la base de datos")
+                st.error("Error de conexión a la base de datos")
     
-    # EL STOP ES LO MÁS IMPORTANTE:
-    # Evita que el programa intente ejecutar bloque_0_inicio() sin permiso
-    st.stop() 
-
-# --- 2. SI LLEGÓ AQUÍ, YA ESTÁ LOGUEADO ---
-# Ahora definimos el Sidebar y los Bloques
+    # ESTO EVITA QUE EL RESTO DEL CÓDIGO (BLOQUE 0) SE EJECUTE
+    st.stop()
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1581,6 +1577,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
