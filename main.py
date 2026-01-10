@@ -51,77 +51,51 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-import sqlite3
-
-# 1. LA FUNCIÓN DEBE ESTAR DEFINIDA ANTES DEL MAIN
-def inicializar_db():
-    try:
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                usuario TEXT PRIMARY KEY, 
-                password TEXT, 
-                rol TEXT
-            )
-        """)
-        # Verificamos si existe el admin, sino lo creamos
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.error(f"Error de base de datos: {e}")
-
-# 2. EL MAIN CON EL LOGIN QUE BLOQUEA ERRORES
 def main():
-    # Configuración de página (Siempre lo primero)
+    # 1. Configuración de página (Siempre lo primero)
     if 'config_set' not in st.session_state:
         st.set_page_config(page_title="APS Orán 2026", layout="wide")
         st.session_state.config_set = True
 
-    # Inicializamos la base de datos (Línea 1531 corregida)
+    # 2. Inicializar DB (Asegura que las tablas existan)
     inicializar_db()
 
+    # 3. Estado de autenticación
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
 
-    # --- LÓGICA DE LOGIN ---
+    # --- BLOQUE DE LOGIN DE EMERGENCIA ---
     if not st.session_state.autenticado:
-        st.title("🏥 Sistema APS Orán")
+        st.title("🏥 APS Orán - Control de Acceso")
         
-        # Formulario para evitar recargas accidentales
-        with st.form("login_aps"):
-            u = st.text_input("Usuario").strip().lower()
-            p = st.text_input("Contraseña", type="password").strip()
-            submit = st.form_submit_button("Ingresar")
-            
-        if submit:
-            # Validación Directa (Llave Maestra)
+        # Usamos llaves únicas (key) para forzar a Streamlit a refrescar los campos
+        u = st.text_input("Usuario", key="user_fix").strip().lower()
+        p = st.text_input("Contraseña", type="password", key="pass_fix").strip()
+        
+        if st.button("🔓 Ingresar"):
+            # VALIDACIÓN MAESTRA (Ignora cualquier error de la tabla usuarios)
             if u == "admin" and (p == "123" or p == "oran2026"):
                 st.session_state.autenticado = True
                 st.session_state.usuario_logueado = "Administrador"
+                st.session_state.rol = "Admin"
+                st.success("¡Acceso concedido!")
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
+                st.error("❌ Usuario o clave no reconocidos por el sistema.")
         
-        # EL STOP ES VITAL: Detiene el código aquí para que no salte el error en Bloque 0
+        # EL STOP ES VITAL: Detiene el código aquí si no hay login.
+        # Esto es lo que evita el NameError y el AttributeError en la línea 150.
         st.stop() 
 
-    # --- TODO LO QUE SIGUE SOLO SE VE SI ESTÁ AUTENTICADO ---
-    st.sidebar.title(f"👤 {st.session_state.usuario_logueado}")
-    menu = st.sidebar.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
-
+    # --- SI LLEGÓ AQUÍ, ESTÁ LOGUEADO ---
+    st.sidebar.success(f"Conectado: {st.session_state.usuario_logueado}")
+    
+    menu = st.sidebar.radio("Menú Principal", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Gestión Usuario"])
+    
     if menu == "🏠 Inicio":
         bloque_0_inicio() # Aquí verás las alertas de vacunación del 07/01
-    elif menu == "⚙️ Admin":
-        bloque_9_admin()
-
-# 3. EJECUCIÓN DEL SCRIPT
-if __name__ == "__main__":
-    main()
+    elif menu == "⚙️ Gestión Usuario":
+        bloque_9_admin() # Aquí es donde pondremos el cambio de password
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1608,6 +1582,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
