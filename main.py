@@ -54,11 +54,26 @@ st.markdown("""
 import streamlit as st
 import sqlite3
 
-# 1. DEFINICIÓN DE FUNCIONES (Primero definimos, luego usamos)
+# =========================================================
+# 1. CONFIGURACIÓN Y SESIÓN (DEBE IR AL PRINCIPIO)
+# =========================================================
+if 'config_set' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
+    st.session_state.config_set = True
+
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+    st.session_state.usuario_logueado = None
+    st.session_state.rol = None
+
+# =========================================================
+# 2. FUNCIONES DE BASE DE DATOS
+# =========================================================
 def inicializar_db():
     try:
         conn = sqlite3.connect('aps_oran_final.db')
         cursor = conn.cursor()
+        # Crear tabla de usuarios
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 usuario TEXT PRIMARY KEY, 
@@ -66,46 +81,82 @@ def inicializar_db():
                 rol TEXT
             )
         """)
-        # Insertar admin por defecto si la tabla está vacía
+        # Insertar admin por defecto si no existe
         cursor.execute("SELECT COUNT(*) FROM usuarios")
         if cursor.fetchone()[0] == 0:
             cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
         conn.commit()
         conn.close()
     except Exception as e:
-        st.error(f"Error al inicializar base de datos: {e}")
+        st.error(f"Error crítico de base de datos: {e}")
 
-# 2. FUNCIÓN PRINCIPAL main()
-def main():
-    # Configuración de página DEBE ir dentro de main o al principio del archivo
-    st.set_page_config(page_title="APS Orán 2026", layout="wide")
+# =========================================================
+# 3. INTERFAZ DE LOGIN (ESTO BLOQUEA LA APP)
+# =========================================================
+def mostrar_login():
+    st.title("🏥 Sistema APS Orán 2026")
+    st.subheader("🔐 Control de Acceso")
     
-    # Ahora sí podemos llamarla porque ya está definida arriba
-    inicializar_db()
-
-    if 'autenticado' not in st.session_state:
-        st.session_state.autenticado = False
-
-    # --- LÓGICA DE LOGIN ---
-    if not st.session_state.autenticado:
-        st.title("🏥 Sistema APS Orán")
-        u = st.text_input("Usuario").strip().lower()
-        p = st.text_input("Contraseña", type="password").strip()
+    with st.container():
+        u = st.text_input("Usuario", key="u_login").strip().lower()
+        p = st.text_input("Contraseña", type="password", key="p_login").strip()
         
-        if st.button("Ingresar"):
+        if st.button("🔓 Ingresar", use_container_width=True):
+            # A. Validación Maestra (Siempre funciona)
             if u == "admin" and (p == "123" or p == "oran2026"):
                 st.session_state.autenticado = True
-                st.session_state.usuario_logueado = "admin"
+                st.session_state.usuario_logueado = "Administrador"
+                st.session_state.rol = "Admin"
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
-        st.stop()
+                # B. Validación por Base de Datos
+                try:
+                    conn = sqlite3.connect('aps_oran_final.db')
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
+                    res = cursor.fetchone()
+                    conn.close()
+                    
+                    if res:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_logueado = res[0]
+                        st.session_state.rol = res[1]
+                        st.rerun()
+                    else:
+                        st.error("❌ Credenciales incorrectas")
+                except:
+                    st.error("⚠️ Error de conexión a la base de datos")
 
-    # --- RESTO DE LA APP (Menú, Bloques, etc.) ---
-    st.sidebar.title(f"Bienvenido {st.session_state.usuario_logueado}")
-    # ... resto de tu código ...
-# --- A PARTIR DE AQUÍ SIGUE TU CÓDIGO DE BLOQUES ---
-# A partir de aquí sigue el resto de tu código (bloque_0_inicio, etc.)
+# =========================================================
+# 4. LÓGICA PRINCIPAL (MAIN)
+# =========================================================
+def main():
+    inicializar_db()
+
+    if not st.session_state.autenticado:
+        mostrar_login()
+        st.stop()  # Detiene la ejecución aquí hasta que se loguee
+
+    # --- BARRA LATERAL (Solo visible si está autenticado) ---
+    with st.sidebar:
+        st.header(f"👤 {st.session_state.usuario_logueado}")
+        st.caption(f"Rol: {st.session_state.rol}")
+        st.write("---")
+        
+        menu = st.radio(
+            "Seleccione una sección:",
+            ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Gestión Usuario"],
+            index=0
+        )
+        
+        st.write("---")
+        if st.button("🚪 Cerrar Sesión", use_container_width=True):
+            st.session_state.autenticado = False
+            st.session_state.usuario_logueado = None
+            st.rerun()
+# =========================================================
+# 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
+# =========================================================
 def bloque_0_inicio():
     st.title("🏠 Sistema APS Orán - Inicio")
     conn = inicializar_db()
@@ -1589,6 +1640,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
