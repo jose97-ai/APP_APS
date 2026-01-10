@@ -5,57 +5,47 @@ from datetime import datetime
 
 # AHORA SÍ, OCULTAMOS GITHUB (Línea 6 en adelante)
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
-import streamlit as st
-import streamlit.components.v1 as components
-
-# 1. ELIMINACIÓN POR JAVASCRIPT (Lo borra del código vivo)
-components.html(
-    """
-    <script>
-    function eliminarGitHub() {
-        // Busca todos los links que lleven a GitHub y los borra
-        const links = window.parent.document.querySelectorAll('a');
-        links.forEach(link => {
-            if (link.href.includes('github.com')) {
-                link.remove();
-            }
-        });
-        // Borra el botón de Deploy
-        const deployBtn = window.parent.document.querySelector('.stAppDeployButton');
-        if (deployBtn) deployBtn.remove();
-    }
-    // Lo ejecuta cada 1 segundo por si Streamlit intenta recrearlo
-    setInterval(eliminarGitHub, 1000);
-    </script>
-    """,
-    height=0,
-)
-
-# 2. ELIMINACIÓN POR CSS (Para la estética y la flechita)
 st.markdown("""
     <style>
-    /* Ocultamos el Menú y Footer */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden !important;} /* Escondemos el header original */
+    /* 1. OCULTAR GITHUB Y EL BOTÓN DE DEPLOY SIN MATAR LA BARRA */
+    .stAppDeployButton, .css-1rs6os0, .st-emotion-cache-1rs6os0, .st-emotion-cache-6q9sum {
+        display: none !important;
+        visibility: hidden !important;
+    }
 
-    /* RESCATAMOS LA FLECHITA (Botón Azul Flotante) */
+    /* 2. HACER QUE LA BARRA SUPERIOR SEA INVISIBLE PERO ESTÉ AHÍ */
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+        color: rgba(0,0,0,0) !important;
+    }
+
+    /* 3. CREAR NUESTRA PROPIA FLECHITA AZUL */
+    /* Este código busca el control del sidebar y lo pone por encima de todo */
     [data-testid="stSidebarCollapsedControl"] {
-        visibility: visible !important;
         display: flex !important;
-        background-color: #007bff !important;
+        visibility: visible !important;
+        z-index: 9999999 !important;
+        background-color: #007bff !important; /* Azul llamativo */
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
         position: fixed !important;
         top: 15px !important;
         left: 15px !important;
-        z-index: 9999999 !important;
-        border-radius: 8px !important;
-        padding: 5px !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.3) !important;
     }
-    /* Flecha blanca */
+
+    /* Forzamos que el icono de la flecha sea blanco para que se vea */
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: white !important;
-        color: white !important;
+        stroke: white !important;
+        width: 25px !important;
+        height: 25px !important;
     }
+
+    /* 4. OCULTAR MENÚ DE 3 RAYAS Y EL FOOTER */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1608,6 +1598,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
