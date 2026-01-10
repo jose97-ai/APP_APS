@@ -1741,81 +1741,56 @@ def bloque_12_centro_datos():
 # ==========================================
 # NAVEGACION
 # ==========================================
+# --- FUNCIÓN MAIN: NAVEGACIÓN COMPLETA ---
 def main():
-    # 1. Siempre inicializar la base de datos primero
     inicializar_db() 
     
-    # 2. Configurar la barra lateral
     st.sidebar.title("🏥 APS Orán 2026")
-    st.sidebar.write(f"Usuario: **{st.session_state.get('usuario_actual', 'Invitado')}**")
     
-    # 3. LISTA DE OPCIONES (Asegúrate que el texto coincida exactamente abajo)
     opciones = [
-        "🏠 Inicio", 
-        "📝 1. Censo", 
-        "🤰 2. Embarazadas", 
-        "🏠 3. Viviendas",
-        "💉 4. Vacunación", 
-        "🍎 5. Nutrición", 
-        "🦠 6. TBC", 
-        "📊 7. Estadísticas",
-        "👥 8. Seguimiento Agentes", 
-        "⚙️ 9. Admin", 
-        "🚀 10. Gestión Avanzada", 
-        "🚨 11. Vigilancia Epidemiológica", 
-        "🗄️ 12. Centro de Datos"  # <-- ESTA LÍNEA ES LA NUEVA
+        "🏠 Inicio", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
+        "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
+        "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
+        "🚨 11. Vigilancia Epidemiológica", "🗄️ 12. Centro de Datos"
     ]
     
-    # Usamos un índice dinámico para evitar errores de refresco
-    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_aps_2026_v2")
+    # Key única para el menú
+    seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_principal_final_2026")
 
     st.sidebar.divider()
-    if st.sidebar.button("🚪 Cerrar Sesión"):
+    # Key única para el botón de logout (Soluciona el error StreamlitDuplicateElementId)
+    if st.sidebar.button("🚪 Cerrar Sesión", key="btn_logout_main"):
         st.session_state.autenticado = False
         st.rerun()
 
-    # --- LÓGICA DE NAVEGACIÓN (Nombres exactos) ---
+    # Lógica de navegación
     if seleccion == "🏠 Inicio":
         bloque_0_inicio()
-
     elif seleccion == "📝 1. Censo":
         bloque_1_censo()
-
     elif seleccion == "🤰 2. Embarazadas":
         bloque_2_materno()
-
     elif seleccion == "🏠 3. Viviendas":
         bloque_3_vivienda()
-
     elif seleccion == "💉 4. Vacunación":
         bloque_4_vacunas()
-
     elif seleccion == "🍎 5. Nutrición":
         bloque_5_nutricion()
-
     elif seleccion == "🦠 6. TBC":
         bloque_6_tbc()
-
     elif seleccion == "📊 7. Estadísticas":
         bloque_7_estadisticas()
-
     elif seleccion == "👥 8. Seguimiento Agentes":
         bloque_8_seguimiento_agentes()
-
     elif seleccion == "⚙️ 9. Admin":
         bloque_9_admin()
-
     elif seleccion == "🚀 10. Gestión Avanzada":
         bloque_10_gestion_avanzada()
-
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
         bloque_11_vigilancia_epidemiologica()
-    
-    # ESTE ES EL DISPARADOR DEL BLOQUE 12
     elif seleccion == "🗄️ 12. Centro de Datos":
         bloque_12_centro_datos()
 
-# No olvides cerrar el archivo con esto:
 if __name__ == "__main__":
     main()
 
