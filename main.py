@@ -84,8 +84,8 @@ if not st.session_state.get('autenticado', False):
             st.error("❌ Credenciales incorrectas")
     st.stop() # IMPORTANTE: Detiene la app si no está logueado
 # --- PEGA ESTO AQUÍ (AL FINAL DE LA BARRA LATERAL) ---
-    st.write("---") # Línea divisoria
-       st.write("---") 
+        st.write("---") # Línea divisoria
+        st.write("---") 
         if st.button("🚪 Cerrar Sesión", use_container_width=True):
             st.session_state.autenticado = False
             st.session_state.usuario_logueado = None
@@ -1656,6 +1656,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
