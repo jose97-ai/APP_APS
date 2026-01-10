@@ -1274,7 +1274,32 @@ def bloque_9_admin():
 
     # --- PESTAÑA 1: GESTIÓN DE USUARIOS Y BORRADO ---
     with tab_u:
-        st.subheader("Control de Usuarios")
+        # --- SECCIÓN NUEVA: CREAR USUARIO ---
+        st.subheader("➕ Registrar Nuevo Usuario")
+        with st.expander("Abrir Formulario de Registro"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                nuevo_u = st.text_input("Nombre de Usuario:", key="new_user").strip().lower()
+            with col2:
+                nuevo_p = st.text_input("Contraseña:", type="password", key="new_pass")
+            with col3:
+                nuevo_r = st.selectbox("Rol del Usuario:", ["Agente Sanitario", "Supervisor", "Admin"], key="new_rol")
+            
+            if st.button("🚀 Crear Usuario"):
+                if nuevo_u and nuevo_p:
+                    try:
+                        cursor.execute("INSERT INTO usuarios (usuario, password, rol) VALUES (?, ?, ?)", 
+                                     (nuevo_u, nuevo_p, nuevo_r))
+                        conn.commit()
+                        st.success(f"✅ Usuario '{nuevo_u}' creado con éxito.")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("❌ El nombre de usuario ya existe.")
+                else:
+                    st.warning("Completa usuario y contraseña.")
+
+        st.write("---")
+        st.subheader("Control de Usuarios Existentes")
         df_usuarios = pd.read_sql("SELECT usuario, rol FROM usuarios", conn)
         
         if not df_usuarios.empty:
@@ -1286,10 +1311,10 @@ def bloque_9_admin():
             with col_a:
                 st.markdown("### 🔑 Cambiar Clave")
                 u_pass = st.selectbox("Usuario:", [""] + df_usuarios['usuario'].tolist(), key="up")
-                nueva_p = st.text_input("Nueva Clave:", type="password", key="np")
+                nueva_p_edit = st.text_input("Nueva Clave:", type="password", key="np")
                 if st.button("Actualizar Contraseña"):
-                    if u_pass and nueva_p:
-                        cursor.execute("UPDATE usuarios SET password=? WHERE usuario=?", (nueva_p, u_pass))
+                    if u_pass and nueva_p_edit:
+                        cursor.execute("UPDATE usuarios SET password=? WHERE usuario=?", (nueva_p_edit, u_pass))
                         conn.commit()
                         st.success("✅ Clave actualizada.")
             
@@ -1333,7 +1358,7 @@ def bloque_9_admin():
                     cursor.execute("INSERT INTO asignaciones (supervisor, agente) VALUES (?, ?)", (sup_sel, a))
                 
                 cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (datetime('now','-3 hours'), ?, 'CAMBIO_GRUPO', ?)",
-                             (st.session_state.usuario_logueado, f"Editó grupo de {sup_sel}"))
+                             (st.session_state.get('usuario_logueado', 'admin'), f"Editó grupo de {sup_sel}"))
                 conn.commit()
                 st.success("Grupo actualizado.")
                 st.rerun()
@@ -1354,7 +1379,6 @@ def bloque_9_admin():
     # --- PESTAÑA 4: SISTEMA (AUDITORÍA VISIBLE) ---
     with tab_s:
         st.subheader("🚨 Panel de Auditoría")
-        # Forzamos la lectura de auditoría
         df_audit = pd.read_sql("SELECT fecha, usuario, accion, detalles FROM auditoria ORDER BY id DESC LIMIT 20", conn)
         
         if df_audit.empty:
@@ -1363,7 +1387,6 @@ def bloque_9_admin():
             st.dataframe(df_audit, use_container_width=True)
             
         st.write("---")
-        # Opción de backup que no puede faltar
         try:
             with open('aps_oran_final.db', 'rb') as f:
                 st.download_button("📥 Descargar Backup Base de Datos", f, "respaldo_aps.db")
@@ -1601,6 +1624,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
