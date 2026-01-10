@@ -54,79 +54,57 @@ st.markdown("""
 import streamlit as st
 import sqlite3
 
-# 1. CONFIGURACIÓN DE PÁGINA (SIEMPRE PRIMERO)
-if 'config_set' not in st.session_state:
-    st.set_page_config(page_title="APS Orán 2026", layout="wide")
-    st.session_state.config_set = True
+# --- 1. CONFIGURACIÓN (OBLIGATORIO AL PRINCIPIO) ---
+st.set_page_config(page_title="APS Orán 2026", layout="wide")
 
-# 2. INICIALIZAR BASE DE DATOS
-def inicializar_db():
-    conn = sqlite3.connect('aps_oran_final.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            usuario TEXT PRIMARY KEY, 
-            password TEXT, 
-            rol TEXT
-        )
-    """)
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
-    conn.commit()
-    conn.close()
-
-inicializar_db()
-
-# 3. LÓGICA DE SESIÓN
+# --- 2. INICIALIZACIÓN DE SESIÓN ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
-# 4. INTERFAZ DE LOGIN ÚNICA
+# --- 3. EL LOGIN DEFINITIVO (SIN FORMULARIOS PARA EVITAR ERRORES) ---
 if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán 2026")
-    st.subheader("🔐 Control de Acceso")
+    st.info("ℹ️ Si el login falla, use: admin / 123")
     
-    with st.form("login_unico"):
-        u = st.text_input("Usuario").strip().lower()
-        p = st.text_input("Contraseña", type="password").strip()
-        boton = st.form_submit_button("Ingresar")
-        
-        if boton:
-            # LLAVES MAESTRAS (Prueba cualquiera de estas dos)
-            if (u == "admin" and p == "123") or (u == "admin" and p == "oran2026"):
-                st.session_state.autenticado = True
-                st.session_state.usuario_logueado = "Administrador"
-                st.session_state.rol = "Admin"
-                st.rerun()
-            else:
-                # Intento por Base de Datos
-                try:
-                    conn = sqlite3.connect('aps_oran_final.db')
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
-                    res = cursor.fetchone()
-                    conn.close()
-                    if res:
-                        st.session_state.autenticado = True
-                        st.session_state.usuario_logueado = res[0]
-                        st.session_state.rol = res[1]
-                        st.rerun()
-                    else:
-                        st.error("❌ Credenciales incorrectas")
-                except:
-                    st.error("Error de conexión")
-    st.stop() 
+    u = st.text_input("Usuario", key="u_final").strip().lower()
+    p = st.text_input("Contraseña", type="password", key="p_final").strip()
+    
+    if st.button("🔓 Acceder"):
+        # PRUEBA DE FUERZA BRUTA
+        if u == "admin" and (p == "123" or p == "oran2026"):
+            st.session_state.autenticado = True
+            st.session_state.usuario_logueado = "Administrador"
+            st.session_state.rol = "Admin"
+            st.rerun()
+        else:
+            # INTENTO POR BASE DE DATOS
+            try:
+                conn = sqlite3.connect('aps_oran_final.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
+                res = cursor.fetchone()
+                conn.close()
+                if res:
+                    st.session_state.autenticado = True
+                    st.session_state.usuario_logueado = res[0]
+                    st.session_state.rol = res[1]
+                    st.rerun()
+                else:
+                    st.error(f"❌ Credenciales incorrectas. El sistema leyó: {u}")
+            except:
+                st.error("Error de base de datos")
+    st.stop() # DETIENE TODO AQUÍ HASTA QUE SE LOGUEE
 
-# 5. MENU LATERAL (SOLO SI ESTÁ AUTENTICADO)
+# --- 4. BARRA LATERAL (SOLO SI YA ENTRÓ) ---
 with st.sidebar:
     st.title(f"👤 {st.session_state.get('usuario_logueado', 'Usuario')}")
-    menu = st.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
+    menu = st.radio("Menú Principal:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
     st.write("---")
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.autenticado = False
         st.rerun()
 
+# --- A PARTIR DE AQUÍ SIGUE TU CÓDIGO DE BLOQUES ---
 # A partir de aquí sigue el resto de tu código (bloque_0_inicio, etc.)
 def bloque_0_inicio():
     st.title("🏠 Sistema APS Orán - Inicio")
@@ -1611,6 +1589,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
