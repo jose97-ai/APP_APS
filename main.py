@@ -51,45 +51,36 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-import sqlite3
-
-# 1. Aseguramos la función de base de datos
-def inicializar_db():
+def bloque_0_inicio():
+    # 1. Abrimos la conexión LOCALMENTE dentro de la función
+    import sqlite3
+    conn = None # Inicializamos para evitar el AttributeError
+    
     try:
         conn = sqlite3.connect('aps_oran_final.db')
         cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-        conn.commit()
-        conn.close()
-    except:
-        pass
+        
+        st.header("🏠 Panel de Control - APS Orán 2026")
 
-# 2. CONFIGURACIÓN INICIAL
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
+        # --- SECCIÓN DE ALERTAS (Pedido 07/01) ---
+        # Esta es la alerta para niños con vacunas atrasadas que solicitaste
+        cursor.execute("SELECT nombre, apellido, proxima_dosis FROM niños WHERE proxima_dosis < DATE('now')")
+        atrasados = cursor.fetchall()
+        
+        if atrasados:
+            st.warning(f"⚠️ Hay {len(atrasados)} niños con vacunas pendientes")
+            for n in atrasados:
+                st.error(f"💉 {n[0]} {n[1]} - Venció: {n[2]}")
+        
+        # ... Aquí sigue el resto de tu código del bloque 0 ...
 
-# --- LOGIN REPARADO (FUERZA BRUTA) ---
-if not st.session_state.autenticado:
-    st.title("🏥 Sistema APS Orán")
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
     
-    # Cambiamos las 'key' para que Streamlit borre la memoria de los intentos fallidos
-    user_input = st.text_input("Usuario", key="u_nuevo").strip().lower()
-    pass_input = st.text_input("Contraseña", type="password", key="p_nuevo").strip()
-    
-    if st.button("🔓 Entrar ahora"):
-        # VALIDACIÓN DIRECTA: Si escribes admin y 123, ENTRAS. 
-        # No importa lo que diga la base de datos en este momento.
-        if user_input == "admin" and (pass_input == "123" or pass_input == "oran2026"):
-            st.session_state.autenticado = True
-            st.session_state.usuario_logueado = "Administrador"
-            st.rerun()
-        else:
-            st.error(f"❌ El sistema recibió: '{user_input}' y '{pass_input}'. No coinciden con admin/123")
-    
-    # EL STOP ES VITAL: Detiene el código aquí para que NO intente 
-    # ejecutar tus bloques de abajo y no te de el error de NameError.
-    st.stop()
+    finally:
+        # 2. SOLO cerramos si la conexión realmente se abrió
+        if conn is not None:
+            conn.close()
 
 # --- AQUÍ EMPIEZA TU CÓDIGO ORIGINAL (NO TOQUES NADA HACIA ABAJO) ---
 # Aquí es donde tienes tus st.sidebar, tus radio buttons y tus bloques.
@@ -1579,6 +1570,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
