@@ -5,49 +5,57 @@ from datetime import datetime
 
 # AHORA SÍ, OCULTAMOS GITHUB (Línea 6 en adelante)
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
+import streamlit as st
+import streamlit.components.v1 as components
+
+# 1. ELIMINACIÓN POR JAVASCRIPT (Lo borra del código vivo)
+components.html(
+    """
+    <script>
+    function eliminarGitHub() {
+        // Busca todos los links que lleven a GitHub y los borra
+        const links = window.parent.document.querySelectorAll('a');
+        links.forEach(link => {
+            if (link.href.includes('github.com')) {
+                link.remove();
+            }
+        });
+        // Borra el botón de Deploy
+        const deployBtn = window.parent.document.querySelector('.stAppDeployButton');
+        if (deployBtn) deployBtn.remove();
+    }
+    // Lo ejecuta cada 1 segundo por si Streamlit intenta recrearlo
+    setInterval(eliminarGitHub, 1000);
+    </script>
+    """,
+    height=0,
+)
+
+# 2. ELIMINACIÓN POR CSS (Para la estética y la flechita)
 st.markdown("""
     <style>
-    /* 1. ANULAR EL LINK DE GITHUB POR SU DIRECCIÓN */
-    header a[href*="github.com"] {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important; /* Esto hace que no se pueda hacer clic */
-        width: 0 !important;
-        height: 0 !important;
-    }
+    /* Ocultamos el Menú y Footer */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden !important;} /* Escondemos el header original */
 
-    /* 2. OCULTAR TODO EL CONTENIDO DEL HEADER EXCEPTO LA FLECHA */
-    /* Esto crea una zona muerta donde estaba el logo */
-    header[data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
-        pointer-events: none !important; /* Nadie puede cliquear el header */
-    }
-
-    /* 3. RESCATAR Y DAR VIDA A LA FLECHITA (BOTÓN AZUL) */
-    /* Le devolvemos el clic solo a la flecha */
+    /* RESCATAMOS LA FLECHITA (Botón Azul Flotante) */
     [data-testid="stSidebarCollapsedControl"] {
         visibility: visible !important;
         display: flex !important;
-        pointer-events: auto !important; /* Habilita el clic solo aquí */
-        background-color: #007bff !important; 
-        color: white !important;
-        border-radius: 8px !important;
+        background-color: #007bff !important;
         position: fixed !important;
-        top: 10px !important;
-        left: 10px !important;
+        top: 15px !important;
+        left: 15px !important;
         z-index: 9999999 !important;
+        border-radius: 8px !important;
         padding: 5px !important;
     }
-
-    /* Forzamos que la flecha sea blanca */
+    /* Flecha blanca */
     [data-testid="stSidebarCollapsedControl"] svg {
         fill: white !important;
         color: white !important;
     }
-
-    /* 4. LIMPIEZA EXTRA */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 # Lógica de seguridad (Login)
@@ -1600,6 +1608,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
