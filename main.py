@@ -51,102 +51,24 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-import sqlite3
-
-# =========================================================
-# 1. CONFIGURACIÓN INICIAL (Debe ser lo primero)
-# =========================================================
-if 'config_set' not in st.session_state:
-    st.set_page_config(page_title="APS Orán 2026", layout="wide")
-    st.session_state.config_set = True
-
+# --- ESTE ES EL LOGIN QUE NO ROMPE TU CÓDIGO ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
-    st.session_state.usuario_logueado = None
 
-# =========================================================
-# 2. FUNCIÓN DE BASE DE DATOS (Para asegurar que todo exista)
-# =========================================================
-def inicializar_db():
-    try:
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
-        # Tabla de usuarios
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                usuario TEXT PRIMARY KEY, 
-                password TEXT, 
-                rol TEXT
-            )
-        """)
-        # Tabla de niños (Para las alertas que pediste el 07/01)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS niños (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT,
-                apellido TEXT,
-                proxima_dosis DATE
-            )
-        """)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.error(f"Error técnico en DB: {e}")
-
-# =========================================================
-# 3. LÓGICA DE LOGIN (REEMPLAZO COMPLETO)
-# =========================================================
-def login():
-    # Inicializamos la DB antes de intentar loguear
-    inicializar_db()
-
-    if not st.session_state.autenticado:
-        st.title("🏥 Sistema APS Orán 2026")
-        st.subheader("🔐 Control de Acceso")
-        
-        # Usamos un contenedor para centrar la vista
-        with st.container():
-            # Keys nuevas para limpiar cualquier error previo de memoria
-            u = st.text_input("Usuario", key="u_login_final").strip().lower()
-            p = st.text_input("Contraseña", type="password", key="p_login_final").strip()
-            
-            if st.button("🔓 Ingresar al Sistema", use_container_width=True):
-                # LLAVE MAESTRA: Prioridad admin/123 para evitar bloqueos
-                if u == "admin" and (p == "123" or p == "oran2026"):
-                    st.session_state.autenticado = True
-                    st.session_state.usuario_logueado = "Administrador"
-                    st.rerun()
-                else:
-                    # Intento por base de datos
-                    try:
-                        conn = sqlite3.connect('aps_oran_final.db')
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT usuario FROM usuarios WHERE LOWER(usuario)=? AND password=?", (u, p))
-                        res = cursor.fetchone()
-                        conn.close()
-                        
-                        if res:
-                            st.session_state.autenticado = True
-                            st.session_state.usuario_logueado = res[0]
-                            st.rerun()
-                        else:
-                            st.error("❌ Credenciales incorrectas")
-                    except:
-                        st.error("⚠️ Error de conexión a la base de datos local")
-        
-        # EL STOP ES VITAL: Detiene el código aquí.
-        # Si no hay login exitoso, Streamlit NO LEERÁ tus bloques de abajo
-        # y así evitamos el error 'NoneType' en el Bloque 0.
-        st.stop()
-
-# --- EJECUTAMOS EL LOGIN ---
-login()
-
-# =========================================================
-# 4. TU CÓDIGO ORIGINAL (NAVEGACIÓN Y BLOQUES)
-# =========================================================
-# A partir de aquí pega tu st.sidebar, tus radio buttons y el llamado a bloque_0_inicio().
+if not st.session_state.autenticado:
+    st.title("🏥 APS Orán")
+    u = st.text_input("Usuario", key="l_u").strip().lower()
+    p = st.text_input("Contraseña", type="password", key="l_p").strip()
+    
+    if st.button("Entrar"):
+        if u == "admin" and (p == "123" or p == "oran2026"):
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Clave incorrecta")
+    
+    # ESTO ES LO MÁS IMPORTANTE:
+    st.stop() # Obliga a Streamlit a NO LEER tus bloques hasta que loguees.
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1648,6 +1570,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
