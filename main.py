@@ -7,23 +7,32 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* Oculta el logo de GitHub y el botón de 'Deploy' */
-    .stAppDeployButton, .css-1rs6os0, .st-emotion-cache-1rs6os0 {
+    /* 1. ELIMINAR GITHUB Y MENÚ DEPLOY POR COMPLETO */
+    .stAppDeployButton, 
+    header[data-testid="stHeader"] .st-emotion-cache-1rs6os0,
+    header[data-testid="stHeader"] .st-emotion-cache-12fmjuu,
+    header[data-testid="stHeader"] a {
         display: none !important;
-    }
-    
-    /* Mantiene el header pero lo hace transparente para que no estorbe */
-    header {
-        background-color: rgba(0,0,0,0) !important;
-        color: rgba(0,0,0,0) !important;
+        visibility: hidden !important;
     }
 
-    /* Asegura que el botón de la barra lateral (la flechita) sea visible */
+    /* 2. HACER QUE EL HEADER NO TENGA COLOR PARA QUE NO SE VEA LA FRANJA */
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+    }
+
+    /* 3. RESCATAR SOLO EL BOTÓN DE LA BARRA LATERAL */
+    /* Lo hacemos flotante y visible para que no se pierda al cerrar */
     [data-testid="stSidebarCollapsedControl"] {
-        color: #000000; /* Color del botón (puedes ponerlo azul o rojo) */
-        background-color: #f0f2f6; /* Fondo suave para que se vea */
-        border-radius: 50%;
-        margin-top: 10px;
+        display: flex !important;
+        visibility: visible !important;
+        background-color: #007bff !important; /* Azul para que se vea */
+        color: white !important;
+        border-radius: 5px !important;
+        top: 10px !important;
+        left: 10px !important;
+        position: fixed !important;
+        z-index: 1000000;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1578,6 +1587,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
