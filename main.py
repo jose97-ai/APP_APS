@@ -55,33 +55,33 @@ st.markdown("""
 # --- LÓGICA DE LOGIN PARA APS ORÁN ---
 def validar_usuario(u, p):
     import sqlite3
-    # 1. Limpieza total de los datos ingresados
     u = u.strip().lower() 
     p = p.strip()
 
-    # 2. PUERTA DE EMERGENCIA (Usa esto si nada funciona)
+    # 1. PUERTA DE EMERGENCIA (Usa esta para entrar ahora)
     if u == "admin" and p == "oran2026": 
         return ("admin", "Admin")
 
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     
-    # 3. Búsqueda flexible en la base de datos
+    # 2. Búsqueda en la base de datos
     cursor.execute("SELECT usuario, rol FROM usuarios WHERE LOWER(usuario) = ? AND password = ?", (u, p))
     resultado = cursor.fetchone()
     conn.close()
     return resultado
 
-# --- INTERFAZ DEL LOGIN ---
-if not st.session_state.get('autenticado', False):
+# --- CONTROL DE ACCESO ---
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán - Ingreso")
-    
-    u_ingresado = st.text_input("Usuario:").strip() # .strip() quita espacios invisibles
+    u_ingresado = st.text_input("Usuario:").strip()
     p_ingresado = st.text_input("Contraseña:", type="password")
     
     if st.button("Entrar"):
         datos_usuario = validar_usuario(u_ingresado, p_ingresado)
-        
         if datos_usuario:
             st.session_state.autenticado = True
             st.session_state.usuario_logueado = datos_usuario[0]
@@ -90,11 +90,10 @@ if not st.session_state.get('autenticado', False):
             st.rerun()
         else:
             st.error("❌ Credenciales incorrectas")
-    st.stop() # IMPORTANTE: Detiene la app si no está logueado
-# --- PEGA ESTO AQUÍ (AL FINAL DE LA BARRA LATERAL) ---
-# ESTA LÍNEA DEBE EMPEZAR EN EL BORDE IZQUIERDO (0 ESPACIOS)
+    st.stop() # Aquí se detiene si NO está logueado
+
+# --- TODO LO QUE SIGUE SOLO SE EJECUTA SI EL USUARIO YA ENTRÓ ---
 if st.session_state.autenticado:
-    # 4 espacios (1 Tab)
     with st.sidebar:
         st.title(f"👤 {st.session_state.usuario_logueado}")
         menu = st.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
@@ -1669,6 +1668,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
