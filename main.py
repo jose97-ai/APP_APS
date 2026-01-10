@@ -1582,6 +1582,163 @@ def bloque_11_vigilancia_epidemiologica():
     except Exception as e:
         st.error(f"Error en Bloque 11: {e}")
 # ==========================================
+# BLOQUE 12: CENTO DE DATOS
+# ==========================================
+def bloque_12_centro_datos():
+    import pandas as pd
+    import sqlite3
+    
+    st.header("🗄️ Centro de Datos - Gestión Integral 2026")
+    
+    # --- LÓGICA DE ROLES ---
+    user_actual = st.session_state.get('usuario_actual', 'desconocido')
+    with obtener_conexion() as conn:
+        res = conn.execute("SELECT rol FROM usuarios WHERE usuario=?", (user_actual,)).fetchone()
+        rol_actual = res[0] if res else "agente"
+
+    # Definir el filtro SQL según el rol (Ajustar 'agente' por el nombre de tu columna de carga)
+    if rol_actual == "admin":
+        filtro_sql = "1=1"
+    elif rol_actual == "supervisor":
+        filtro_sql = f"sector = (SELECT sector FROM usuarios WHERE usuario='{user_actual}')"
+    else:
+        filtro_sql = f"agente = '{user_actual}'"
+
+    st.info(f"Usuario: {user_actual.upper()} | Permisos: {rol_actual.upper()}")
+    
+    # Definición de las 7 pestañas
+    t = st.tabs(["Censo", "Embarazada", "Vivienda", "Vacunación", "Peso/Talla", "TBC", "📂 Mantenimiento"])
+
+    # 1. CENSO
+    with t[0]:
+        st.subheader("👥 Gestión de Censo")
+        busc_c = st.text_input("DNI o Nro Casa (Censo)", key="edit_c").strip()
+        if busc_c:
+            with obtener_conexion() as conn:
+                df = pd.read_sql(f"SELECT rowid, * FROM censo WHERE (dni='{busc_c}' OR nro_casa='{busc_c}') AND ({filtro_sql})", conn)
+                if not df.empty:
+                    st.dataframe(df)
+                    if st.button("Eliminar del Censo", key="btn_del_c"):
+                        conn.execute(f"DELETE FROM censo WHERE rowid IN ({','.join(map(str, df['rowid']))})")
+                        conn.commit()
+                        st.success("Registros eliminados")
+                        st.rerun()
+                else: st.warning("Sin registros o sin permisos.")
+
+    # 2. EMBARAZADA
+    with t[1]:
+        st.subheader("🤰 Gestión de Embarazadas")
+        busc_e = st.text_input("DNI (Embarazada)", key="edit_e").strip()
+        if busc_e:
+            with obtener_conexion() as conn:
+                df = pd.read_sql(f"SELECT rowid, * FROM embarazadas WHERE dni='{busc_e}' AND ({filtro_sql})", conn)
+                if not df.empty:
+                    st.dataframe(df)
+                    if st.button("Eliminar Registro Embarazo"):
+                        conn.execute(f"DELETE FROM embarazadas WHERE rowid={df['rowid'].iloc[0]}")
+                        conn.commit()
+                        st.rerun()
+                else: st.warning("Sin acceso.")
+
+    # 3. VIVIENDA (Editar Latitud y Longitud)
+    with t[2]:
+        st.subheader("🏠 Ubicación de Vivienda")
+        busc_v = st.text_input("Nro Casa/APS para coordenadas", key="edit_v").strip()
+        if busc_v:
+            with obtener_conexion() as conn:
+                v = conn.execute(f"SELECT rowid, latitud, longitud FROM viviendas WHERE nro_casa=? AND ({filtro_sql})", (busc_v,)).fetchone()
+                if v:
+                    la, lo = st.columns(2)
+                    n_lat = la.text_input("Latitud", value=str(v[1]))
+                    n_lon = lo.text_input("Longitud", value=str(v[2]))
+                    if st.button("Actualizar GPS"):
+                        conn.execute("UPDATE viviendas SET latitud=?, longitud=? WHERE rowid=?", (n_lat, n_lon, v[0]))
+                        conn.commit()
+                        st.success("Coordenadas guardadas")
+                else: st.error("Vivienda no encontrada o fuera de su sector.")
+
+    # 4. VACUNACIÓN (Editar Vacuna, Dosis, Lote)
+    with t[3]:
+        st.subheader("💉 Gestión de Vacunas")
+        busc_vac = st.text_input("DNI (Vacunas)", key="edit_vac").strip()
+        if busc_vac:
+            with obtener_conexion() as conn:
+                df = pd.read_sql(f"SELECT rowid, * FROM vacunas WHERE dni='{busc_vac}' AND ({filtro_sql})", conn)
+                for i, r in df.iterrows():
+                    with st.expander(f"Vacuna: {r['vacuna']} - {r['fecha']}"):
+                        v_n = st.text_input("Vacuna", r['vacuna'], key=f"v_n{r['rowid']}")
+                        v_d = st.text_input("Dosis", r['dosis'], key=f"v_d{r['rowid']}")
+                        v_l = st.text_input("Lote", r['lote'], key=f"v_l{r['rowid']}")
+                        c1, c2 = st.columns(2)
+                        if c1.button("Guardar Cambios", key=f"v_s{r['rowid']}"):
+                            conn.execute("UPDATE vacunas SET vacuna=?, dosis=?, lote=? WHERE rowid=?", (v_n, v_d, v_l, r['rowid']))
+                            conn.commit()
+                            st.rerun()
+                        if c2.button("Borrar Dosis", key=f"v_b{r['rowid']}"):
+                            conn.execute("DELETE FROM vacunas WHERE rowid=?", (r['rowid'],))
+                            conn.commit()
+                            st.rerun()
+
+    # 5. PESO Y TALLA
+    with t[4]:
+        st.subheader("⚖️ Gestión de Antropometría")
+        busc_pt = st.text_input("DNI (Peso y Talla)", key="edit_pt").strip()
+        if busc_pt:
+            with obtener_conexion() as conn:
+                df = pd.read_sql(f"SELECT rowid, * FROM peso_talla WHERE dni='{busc_pt}' AND ({filtro_sql})", conn)
+                for i, r in df.iterrows():
+                    c1, c2, c3 = st.columns(3)
+                    p = c1.number_input("Peso", value=float(r['peso']), key=f"p_{r['rowid']}")
+                    ta = c2.number_input("Talla", value=float(r['talla']), key=f"t_{r['rowid']}")
+                    if c3.button("Actualizar", key=f"pt_a{r['rowid']}"):
+                        conn.execute("UPDATE peso_talla SET peso=?, talla=? WHERE rowid=?", (p, ta, r['rowid']))
+                        conn.commit()
+                        st.success("Cargado")
+
+    # 6. TBC (Editar Tomaciones)
+    with t[5]:
+        st.subheader("💊 Control TBC")
+        busc_tbc = st.text_input("DNI (Paciente TBC)", key="edit_tbc").strip()
+        if busc_tbc:
+            with obtener_conexion() as conn:
+                r = conn.execute(f"SELECT rowid, tomaciones_total FROM tbc WHERE dni=? AND ({filtro_sql})", (busc_tbc,)).fetchone()
+                if r:
+                    nt = st.number_input("Tomaciones registradas", value=int(r[1]))
+                    if st.button("Corregir Tomaciones"):
+                        conn.execute("UPDATE tbc SET tomaciones_total=? WHERE rowid=?", (nt, r[0]))
+                        conn.commit()
+                        st.success("Datos de tratamiento actualizados")
+                else: st.error("No se encontró el paciente o no tiene permiso.")
+
+    # 7. MANTENIMIENTO (Exportar y Limpiar)
+    with t[6]:
+        st.subheader("📂 Centro de Exportación y Limpieza")
+        if rol_actual not in ["admin", "supervisor"]:
+            st.warning("⛔ Acceso restringido a Supervisores.")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("### Exportar a Reporte")
+                exp = st.selectbox("Seleccione tabla:", ["censo", "embarazadas", "viviendas", "vacunas", "peso_talla", "tbc"])
+                if st.button("Generar Reporte CSV/PDF"):
+                    with obtener_conexion() as conn:
+                        df_exp = pd.read_sql(f"SELECT * FROM {exp} WHERE {filtro_sql}", conn)
+                        st.download_button("📥 Descargar Reporte", df_exp.to_csv(index=False), f"reporte_{exp}.csv", "text/csv")
+            
+            with col2:
+                st.write("### Borrado Masivo")
+                limp = st.selectbox("Tabla a vaciar:", ["--", "Censo", "Embarazada", "Vivienda", "Vacunación", "Peso/Talla", "TBC", "TODO"])
+                conf = st.checkbox("Confirmo que deseo vaciar la tabla (No borra columnas)")
+                if st.button("💣 EJECUTAR LIMPIEZA") and conf:
+                    with obtener_conexion() as conn:
+                        mapa = {"Censo":"censo","Embarazada":"embarazadas","Vivienda":"viviendas","Vacunación":"vacunas","Peso/Talla":"peso_talla","TBC":"tbc"}
+                        if limp == "TODO":
+                            for v in mapa.values(): conn.execute(f"DELETE FROM {v} WHERE {filtro_sql}")
+                        elif limp in mapa:
+                            conn.execute(f"DELETE FROM {mapa[limp]} WHERE {filtro_sql}")
+                        conn.commit()
+                        st.success(f"Limpieza de {limp} terminada.")
+# ==========================================
 # NAVEGACION
 # ==========================================
 def main():
@@ -1589,16 +1746,17 @@ def main():
     
     st.sidebar.title("🏥 APS Orán 2026")
     
+    # Agregamos la opción 12 a tu lista original
     opciones = [
         "🏠 Inicio", "📝 1. Censo", "🤰 2. Embarazadas", "🏠 3. Viviendas",
         "💉 4. Vacunación", "🍎 5. Nutrición", "🦠 6. TBC", "📊 7. Estadísticas",
         "👥 8. Seguimiento Agentes", "⚙️ 9. Admin", "🚀 10. Gestión Avanzada", 
-        "🚨 11. Vigilancia Epidemiológica"
+        "🚨 11. Vigilancia Epidemiológica", "🗄️ 12. Centro de Datos"
     ]
     
     seleccion = st.sidebar.selectbox("Seleccione Sección:", opciones, key="menu_aps_final")
 
-    # --- NAVEGACIÓN CON NOMBRES EXACTOS DE TU LISTA ---
+    # --- NAVEGACIÓN ---
     if seleccion == "🏠 Inicio":
         bloque_0_inicio()
 
@@ -1609,7 +1767,6 @@ def main():
         bloque_2_materno()
 
     elif seleccion == "🏠 3. Viviendas":
-        # CORREGIDO: Ahora llama a 'bloque_3_vivienda' (singular) como en tu lista
         bloque_3_vivienda()
 
     elif seleccion == "💉 4. Vacunación":
@@ -1635,6 +1792,10 @@ def main():
 
     elif seleccion == "🚨 11. Vigilancia Epidemiológica":
         bloque_11_vigilancia_epidemiologica()
+    
+    # NUEVO: Navegación al Bloque 12
+    elif seleccion == "🗄️ 12. Centro de Datos":
+        bloque_12_centro_datos()
 
 if __name__ == "__main__":
     main()
