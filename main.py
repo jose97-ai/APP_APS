@@ -84,16 +84,18 @@ if not st.session_state.get('autenticado', False):
             st.error("❌ Credenciales incorrectas")
     st.stop() # IMPORTANTE: Detiene la app si no está logueado
 # --- PEGA ESTO AQUÍ (AL FINAL DE LA BARRA LATERAL) ---
-     if st.session_state.autenticado:
-....# El bloque "with" debe tener exactamente 4 espacios (1 Tab)
-....with st.sidebar:
-........st.title("Menú Principal")
-........menu = st.radio("Ir a:", ["Inicio", "Censo", "Vacunas", "Admin"])
-........
-........st.write("---")
-........if st.button("🚪 Cerrar Sesión"):
-............st.session_state.autenticado = False
-............st.rerun()
+# ESTA LÍNEA DEBE EMPEZAR EN EL BORDE IZQUIERDO (0 ESPACIOS)
+if st.session_state.autenticado:
+    # 4 espacios (1 Tab)
+    with st.sidebar:
+        st.title(f"👤 {st.session_state.usuario_logueado}")
+        menu = st.radio("Menú:", ["🏠 Inicio", "📋 Censo", "💉 Vacunas", "⚙️ Admin"])
+        
+        st.write("---")
+        if st.button("🚪 Cerrar Sesión", use_container_width=True):
+            st.session_state.autenticado = False
+            st.session_state.usuario_logueado = None
+            st.rerun()
 # 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
 if 'config_set' not in st.session_state:
     st.set_page_config(page_title="APS Orán 2026", layout="wide")
@@ -1659,6 +1661,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
