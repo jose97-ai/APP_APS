@@ -54,49 +54,41 @@ st.markdown("""
 import streamlit as st
 import sqlite3
 
-# 1. ESTO DEBE IR ARRIBA DE TODO para que el login lo encuentre
+# 1. Aseguramos la función de base de datos
 def inicializar_db():
     try:
         conn = sqlite3.connect('aps_oran_final.db')
         cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                usuario TEXT PRIMARY KEY, password TEXT, rol TEXT
-            )
-        """)
+        cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
         conn.commit()
         conn.close()
-    except Exception as e:
+    except:
         pass
 
-# 2. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
-if 'config_set' not in st.session_state:
-    st.set_page_config(page_title="APS Orán 2026", layout="wide")
-    st.session_state.config_set = True
-
-# 3. LÓGICA DE LOGIN (Reparada para que no salte al bloque 0)
+# 2. CONFIGURACIÓN INICIAL
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
+# --- LOGIN REPARADO (FUERZA BRUTA) ---
 if not st.session_state.autenticado:
     st.title("🏥 Sistema APS Orán")
-    # Inicializamos la DB antes del login
-    inicializar_db()
     
-    u = st.text_input("Usuario", key="login_user").strip().lower()
-    p = st.text_input("Contraseña", type="password", key="login_pass").strip()
+    # Cambiamos las 'key' para que Streamlit borre la memoria de los intentos fallidos
+    user_input = st.text_input("Usuario", key="u_nuevo").strip().lower()
+    pass_input = st.text_input("Contraseña", type="password", key="p_nuevo").strip()
     
-    if st.button("Ingresar"):
-        # Acceso directo para evitar errores de conexión
-        if u == "admin" and (p == "123" or p == "oran2026"):
+    if st.button("🔓 Entrar ahora"):
+        # VALIDACIÓN DIRECTA: Si escribes admin y 123, ENTRAS. 
+        # No importa lo que diga la base de datos en este momento.
+        if user_input == "admin" and (pass_input == "123" or pass_input == "oran2026"):
             st.session_state.autenticado = True
             st.session_state.usuario_logueado = "Administrador"
             st.rerun()
         else:
-            st.error("Credenciales incorrectas")
+            st.error(f"❌ El sistema recibió: '{user_input}' y '{pass_input}'. No coinciden con admin/123")
     
-    # EL STOP ES LA CLAVE: Evita que Streamlit lea tus bloques 
-    # y te de el error de NameError o AttributeError antes de loguearte.
+    # EL STOP ES VITAL: Detiene el código aquí para que NO intente 
+    # ejecutar tus bloques de abajo y no te de el error de NameError.
     st.stop()
 
 # --- AQUÍ EMPIEZA TU CÓDIGO ORIGINAL (NO TOQUES NADA HACIA ABAJO) ---
@@ -1587,6 +1579,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
