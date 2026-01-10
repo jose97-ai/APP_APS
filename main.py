@@ -7,36 +7,42 @@ from datetime import datetime
 # --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    /* 1. OCULTA EL HEADER COMPLETO (Esto quita GitHub, Deploy y la franja blanca) */
+    /* 1. ELIMINAR GITHUB Y EL HEADER POR COMPLETO */
     header[data-testid="stHeader"] {
-        visibility: hidden;
-        height: 0% !important;
+        visibility: hidden !important;
+        display: none !important;
     }
 
-    /* 2. REAPARECE SOLO EL BOTÓN DE LA BARRA LATERAL (La flechita) */
-    /* Lo movemos un poco y le damos color para que no dependa del header oculto */
-    [data-testid="stSidebarCollapsedControl"] {
+    /* 2. RESCATAR Y MOSTRAR LA FLECHITA (BOTÓN LATERAL) */
+    /* Usamos un selector universal para encontrar el botón de colapso */
+    button[kind="headerNoContext"], [data-testid="stSidebarCollapsedControl"] {
         visibility: visible !important;
-        background-color: #007bff !important; /* Azul APS */
+        display: flex !important;
+        opacity: 1 !important;
+        background-color: #007bff !important; /* Azul llamativo */
         color: white !important;
         border-radius: 8px !important;
         position: fixed !important;
         top: 15px !important;
         left: 15px !important;
-        z-index: 9999999;
-        padding: 5px !important;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+        z-index: 9999999 !important;
+        padding: 8px !important;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* Cambia el color del icono de la flecha a blanco para que se vea bien */
+    [data-testid="stSidebarCollapsedControl"] svg {
+        fill: white !important;
+        color: white !important;
     }
 
-    /* 3. QUITA EL MENÚ DE LAS 3 RAYAS (Para que nadie vea el código) */
+    /* 3. QUITAR EL MENÚ DE LA DERECHA Y EL FOOTER */
     #MainMenu {visibility: hidden;}
-    
-    /* 4. QUITA EL PIE DE PÁGINA */
     footer {visibility: hidden;}
 
-    /* 5. AJUSTA EL CUERPO DE LA APP PARA QUE NO QUEDE UN HUECO ARRIBA */
-    .stApp {
-        margin-top: -60px;
+    /* 4. AJUSTAR EL CONTENIDO PARA QUE NO QUEDE HUECO */
+    .block-container {
+        padding-top: 2rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1590,6 +1596,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
