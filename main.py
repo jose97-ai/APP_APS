@@ -151,47 +151,40 @@ login()
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
 def bloque_0_inicio():
-    st.title("🏠 Sistema APS Orán - Inicio")
-    conn = inicializar_db()
+    import sqlite3
+    conn = None  # Inicializamos en None para evitar el error de 'NoneType'
     
     try:
-        # Métricas principales
-        p_res = conn.execute("SELECT COUNT(*) FROM integrantes").fetchone()[0]
-        v_res = conn.execute("SELECT COUNT(*) FROM viviendas").fetchone()[0]
+        # Abrimos la conexión propia del bloque
+        conn = sqlite3.connect('aps_oran_final.db')
+        cursor = conn.cursor()
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Población", f"{p_res} pers.")
-        c2.metric("Viviendas", v_res)
-        c3.metric("Fecha", date.today().strftime("%d/%m/%Y"))
+        st.header("🏠 Panel de Control - APS Orán 2026")
 
-        st.divider()
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("🚩 Riesgo Habitacional")
-            df_r = pd.read_sql("SELECT nro_casa, prioridad FROM viviendas WHERE prioridad IN ('Alta', 'CRÍTICA')", conn)
-            if not df_r.empty:
-                st.error(f"Hay {len(df_r)} viviendas en riesgo crítico.")
-                st.dataframe(df_r, use_container_width=True)
-            else:
-                st.success("✅ Sin riesgos críticos detectados.") # Asegúrate de que tenga los ()
-
-        with col2:
-            st.subheader("👶 Alerta Vacunación (<5 años)")
-            limite = (date.today() - timedelta(days=5*365)).isoformat()
-            query = f"SELECT nombre, nro_casa FROM integrantes WHERE f_nac > '{limite}' AND dni NOT IN (SELECT DISTINCT dni FROM vacunas)"
-            df_v = pd.read_sql(query, conn)
+        # --- SECCIÓN DE ALERTAS DE VACUNACIÓN (Pedido 07/01) ---
+        st.subheader("⚠️ Alertas de Vacunación")
+        
+        # Verificamos si la tabla existe antes de consultar
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='niños'")
+        if cursor.fetchone():
+            cursor.execute("SELECT nombre, apellido, proxima_dosis FROM niños WHERE proxima_dosis < DATE('now')")
+            atrasados = cursor.fetchall()
             
-            if not df_v.empty:
-                st.warning(f"Hay {len(df_v)} niños con vacunas pendientes.")
-                st.dataframe(df_v, use_container_width=True)
+            if atrasados:
+                for n in atrasados:
+                    st.error(f"💉 Vacuna pendiente: {n[0]} {n[1]} (Venció: {n[2]})")
             else:
-                st.success("✅ Todos los niños están al día.") # Asegúrate de que tenga los ()
+                st.success("✅ Calendarios de vacunación al día.")
+        else:
+            st.info("ℹ️ No hay datos de niños registrados para alertas.")
+
     except Exception as e:
-        st.error(f"Error al cargar datos: {e}")
+        st.error(f"Error al cargar el Dashboard: {e}")
+    
     finally:
-        conn.close()
-        # Aquí sigue tu código original del Bloque 1
+        # ESTA ES LA LÍNEA 193 CORREGIDA: Solo cierra si conn existe
+        if conn is not None:
+            conn.close()
 # ==========================================
 # BLOQUE 1: CENSO (VERSIÓN FINAL CON CASA/APS)
 # ==========================================
@@ -1633,6 +1626,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
