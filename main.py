@@ -51,59 +51,59 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-import streamlit as st
-import sqlite3
-
-# --- 1. PRIMERO DEFINIMOS LA FUNCIÓN (Para evitar el NameError) ---
-def inicializar_db():
-    try:
-        conn = sqlite3.connect('aps_oran_final.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                usuario TEXT PRIMARY KEY, 
-                password TEXT, 
-                rol TEXT
-            )
-        """)
-        # Verificamos si existe el admin, sino lo creamos
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", ("admin", "oran2026", "Admin"))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.error(f"Error de base de datos: {e}")
-
-# --- 2. LUEGO LA FUNCIÓN PRINCIPAL ---
 def main():
-    # Configuración obligatoria al inicio del main
+    # 1. Configuración inicial
     if 'config_set' not in st.session_state:
         st.set_page_config(page_title="APS Orán 2026", layout="wide")
         st.session_state.config_set = True
 
-    # Ahora sí la llamamos, ya está definida arriba
+    # 2. Inicializar base de datos (se abre y cierra sola)
     inicializar_db()
 
+    # 3. Control de Sesión
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
 
-    # --- LOGIN DE EMERGENCIA ---
+    # --- LÓGICA DE LOGIN REPARADA ---
     if not st.session_state.autenticado:
         st.title("🏥 Sistema APS Orán")
-        u = st.text_input("Usuario", key="u_main").strip().lower()
-        p = st.text_input("Contraseña", type="password", key="p_main").strip()
         
-        if st.button("🔓 Ingresar"):
-            # Llaves maestras
-            if u == "admin" and (p == "123" or p == "oran2026" or p == "admin"):
+        # Usamos un formulario para asegurar que los datos se envíen juntos
+        with st.form("login_form"):
+            u = st.text_input("Usuario").strip().lower()
+            p = st.text_input("Contraseña", type="password").strip()
+            submit = st.form_submit_button("Ingresar")
+        
+        if submit:
+            # LLAVE MAESTRA (Independiente de la DB)
+            if u == "admin" and (p == "123" or p == "oran2026"):
                 st.session_state.autenticado = True
                 st.session_state.usuario_logueado = "Administrador"
-                st.session_state.rol = "Admin"
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
-        st.stop() # Bloquea el resto de la app
+                # Intento por base de datos (Abriendo y CERRANDO la conexión aquí mismo)
+                try:
+                    conn_temp = sqlite3.connect('aps_oran_final.db')
+                    cursor_temp = conn_temp.cursor()
+                    cursor_temp.execute("SELECT usuario FROM usuarios WHERE usuario=? AND password=?", (u, p))
+                    user_existe = cursor_temp.fetchone()
+                    conn_temp.close() # <--- Cerramos aquí para que no afecte a lo que sigue
+                    
+                    if user_existe:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_logueado = user_existe[0]
+                        st.rerun()
+                    else:
+                        st.error("Credenciales incorrectas")
+                except:
+                    st.error("Error de conexión local")
+        
+        # ESTO ES LO QUE EVITA EL ERROR: Detiene el código aquí si no hay login.
+        st.stop() 
+
+    # --- DESPUÉS DEL LOGIN (Solo llega aquí si autenticado es True) ---
+    # Ya no dependemos de ninguna variable 'conn' del login
+    st.sidebar.title(f"Bienvenido {st.session_state.usuario_logueado}")
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1590,6 +1590,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
