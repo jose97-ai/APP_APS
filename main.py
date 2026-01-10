@@ -4,11 +4,27 @@ import pandas as pd
 from datetime import datetime
 
 # AHORA SÍ, OCULTAMOS GITHUB (Línea 6 en adelante)
+# --- CSS PARA OCULTAR GITHUB PERO MANTENER EL BOTÓN DEL MENÚ ---
 st.markdown("""
     <style>
-    header {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* Oculta el logo de GitHub y el botón de 'Deploy' */
+    .stAppDeployButton, .css-1rs6os0, .st-emotion-cache-1rs6os0 {
+        display: none !important;
+    }
+    
+    /* Mantiene el header pero lo hace transparente para que no estorbe */
+    header {
+        background-color: rgba(0,0,0,0) !important;
+        color: rgba(0,0,0,0) !important;
+    }
+
+    /* Asegura que el botón de la barra lateral (la flechita) sea visible */
+    [data-testid="stSidebarCollapsedControl"] {
+        color: #000000; /* Color del botón (puedes ponerlo azul o rojo) */
+        background-color: #f0f2f6; /* Fondo suave para que se vea */
+        border-radius: 50%;
+        margin-top: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1562,6 +1578,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
