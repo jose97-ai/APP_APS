@@ -51,24 +51,96 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-# --- ESTE ES EL LOGIN QUE NO ROMPE TU CÓDIGO ---
+# Lógica de seguridad (Login)
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+import streamlit as st
+import sqlite3
+import pandas as pd
+from datetime import date, datetime, timedelta
+
+# 1. CONFIGURACIÓN DE PÁGINA (Debe ser lo primero de Streamlit)
+if 'config_set' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide")
+    st.session_state.config_set = True
+
+# 2. CONTROL DE ACCESO INMEDIATO
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 
+# --- ESTO BLOQUEA TODO EL ARCHIVO SI NO HAY LOGIN ---
 if not st.session_state.autenticado:
-    st.title("🏥 APS Orán")
-    u = st.text_input("Usuario", key="l_u").strip().lower()
-    p = st.text_input("Contraseña", type="password", key="l_p").strip()
+    st.title("🏥 Sistema APS Orán 2026")
+    st.subheader("🔐 Control de Acceso")
     
-    if st.button("Entrar"):
-        if u == "admin" and (p == "123" or p == "oran2026"):
-            st.session_state.autenticado = True
-            st.rerun()
-        else:
-            st.error("Clave incorrecta")
+    with st.form("login_inicial"):
+        u = st.text_input("Usuario")
+        p = st.text_input("Contraseña", type="password")
+        if st.form_submit_button("Ingresar"):
+            # Acceso de emergencia o consulta a DB
+            if (u == "admin" and p == "admin") or (u == "supervisor" and p == "oran2026"):
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = u
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
     
-    # ESTO ES LO MÁS IMPORTANTE:
-    st.stop() # Obliga a Streamlit a NO LEER tus bloques hasta que loguees.
+    # MUY IMPORTANTE: El st.stop() detiene TODO el archivo aquí mismo
+    st.stop() 
+
+# --- A PARTIR DE AQUÍ SOLO LLEGA EL QUE SE LOGUEÓ ---
+# Esta función es la que el Bloque 7 (y otros) está reclamando
+def conectar_y_reparar():
+    """Función de conexión exigida por los bloques originales"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    # Configuramos para que las consultas devuelvan diccionarios si es necesario
+    conn.row_factory = sqlite3.Row 
+    return conn
+
+# También definimos obtener_conexion por si otros bloques usan ese nombre
+def obtener_conexion():
+    return conectar_y_reparar()
+import streamlit as st
+import pandas as pd
+import sqlite3
+import hashlib
+from datetime import datetime, date, timedelta
+def obtener_ronda_info():
+    """Retorna la ronda actual y el año para los formularios (Línea 206)"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    try:
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+        cursor.execute("SELECT valor FROM config WHERE clave = 'ronda_actual'")
+        ronda = cursor.fetchone()
+        return (ronda[0] if ronda else "1"), 2026
+    except:
+        return "1", 2026
+    finally:
+        conn.close()
+
+def obtener_conexion():
+    """Función de conexión estándar para todos los bloques"""
+    return sqlite3.connect('aps_oran_final.db')
+# --- 1. CONFIGURACIÓN ÚNICA ---
+# Evita que se ejecute la configuración más de una vez
+if 'config_lista' not in st.session_state:
+    st.set_page_config(page_title="APS Orán 2026", layout="wide", page_icon="🏥")
+    st.session_state.config_lista = True
+
+# --- 2. MOTOR DE BASE DE DATOS Y REPARACIÓN ---
+def inicializar_db():
+    """Función unificada para evitar el NameError"""
+    conn = sqlite3.connect('aps_oran_final.db')
+    cursor = conn.cursor()
+    # Crear tablas base
+    cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, fecha TEXT)")
+    conn.commit()
+    return conn
+
 # =========================================================
 # 5. AQUÍ EMPIEZAN TUS BLOQUES (bloque_0_inicio, etc.)
 # =========================================================
@@ -1570,6 +1642,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
