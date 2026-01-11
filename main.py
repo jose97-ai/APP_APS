@@ -1465,7 +1465,7 @@ def inicializar_tablas_sistema():
     conn.commit()
     conn.close()
 # ==========================================
-# BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS (VERSIÓN MEJORADA + OFFLINE)
+# BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS (ADMINISTRACIÓN TOTAL)
 # ==========================================
 def bloque_9_admin():
     import sqlite3
@@ -1473,117 +1473,148 @@ def bloque_9_admin():
     import streamlit as st
     from datetime import datetime
 
-    usuario_admin = st.session_state.get('usuario_logueado', 'admin')
+    # Verificación de Seguridad
+    usuario_admin_actual = st.session_state.get('usuario_logueado', 'admin')
     
-    if usuario_admin != 'admin':
-        st.error("🚫 Acceso denegado. Esta sección es solo para el Administrador.")
-        return
-
-    st.title("⚙️ Gestión Superior APS - Orán")
-    
+    # Intentar obtener el rol real de la DB para evitar errores de sesión
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-
-    # --- INFRAESTRUCTURA DE TABLAS Y REPARACIÓN OFFLINE ---
+    
+    # Asegurar tablas críticas
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
     cursor.execute("CREATE TABLE IF NOT EXISTS auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, usuario TEXT, accion TEXT, detalles TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, nro_casa TEXT, registrado_por TEXT)")
     
-    # Blindaje contra el error de Pandas: Verificar columna 'sincronizado'
-    try:
-        cursor.execute("SELECT sincronizado FROM integrantes LIMIT 1")
-    except sqlite3.OperationalError:
-        # Si la columna no existe, la creamos (Migración)
-        cursor.execute("ALTER TABLE integrantes ADD COLUMN sincronizado INTEGER DEFAULT 1")
+    res_rol = cursor.execute("SELECT rol FROM usuarios WHERE usuario=?", (usuario_admin_actual,)).fetchone()
+    rol_real = res_rol[0] if res_rol else "Administrador" # Admin por defecto si es el primero
+
+    if "Administrador" not in rol_real:
+        st.error(f"🚫 Acceso denegado. Su rol actual es {rol_real}. Esta sección requiere permisos de Administrador.")
+        conn.close()
+        return
+
+    st.title("⚙️ Gestión Superior APS - Orán")
+    
+    # Función auxiliar para registrar auditoría
+    def registrar_evento(accion, detalles):
+        ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("INSERT INTO auditoria (fecha, usuario, accion, detalles) VALUES (?,?,?,?)",
+                       (ahora, usuario_admin_actual, accion, detalles))
         conn.commit()
 
     tab_u, tab_g, tab_r, tab_s = st.tabs(["👥 Usuarios", "🏗️ Gestión de Grupos", "🔄 Rondas", "🚨 Sistema"])
 
-    # --- PESTAÑA 1: USUARIOS (INCLUYE CAMBIO DE PASSWORD) ---
+    # --- PESTAÑA 1: GESTIÓN DE USUARIOS ---
     with tab_u:
-        col_reg, col_pass = st.columns(2)
+        col_reg, col_edit = st.columns(2)
         
         with col_reg:
-            st.subheader("➕ Nuevo Usuario")
-            nuevo_u = st.text_input("Usuario:", key="nu").strip().lower()
-            nuevo_p = st.text_input("Contraseña:", type="password", key="np_admin")
-            nuevo_r = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"], key="nr")
+            st.subheader("➕ Nuevo Perfil")
+            nuevo_u = st.text_input("Nombre de Usuario:", key="nu").strip().lower()
+            nuevo_p = st.text_input("Contraseña:", type="password", key="np")
+            nuevo_r = st.selectbox("Rol del Sistema:", ["Agente Sanitario", "Supervisor", "Administrador"], key="nr")
+            
             if st.button("🚀 Crear Usuario"):
                 if nuevo_u and nuevo_p:
                     try:
                         cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?)", (nuevo_u, nuevo_p, nuevo_r))
-                        conn.commit()
-                        st.success("Usuario creado.")
+                        registrar_evento("CREACIÓN", f"Se creó el usuario {nuevo_u} con rol {nuevo_r}")
+                        st.success(f"Usuario {nuevo_u} creado correctamente.")
                         st.rerun()
-                    except: st.error("El usuario ya existe.")
+                    except: st.error("Ese nombre de usuario ya está en uso.")
 
-        with col_pass:
-            st.subheader("🔑 Cambiar Contraseña")
-            usuarios_db = pd.read_sql("SELECT usuario FROM usuarios", conn)
-            u_cambio = st.selectbox("Seleccionar Usuario:", usuarios_db['usuario'])
-            pass_nueva = st.text_input("Nueva Contraseña:", type="password", key="pass_change")
-            if st.button("Actualizar Clave"):
-                if pass_nueva:
-                    cursor.execute("UPDATE usuarios SET password = ? WHERE usuario = ?", (pass_nueva, u_cambio))
-                    conn.commit()
-                    st.success(f"Clave de {u_cambio} actualizada.")
+        with col_edit:
+            st.subheader("🛠️ Modificar / Eliminar")
+            df_users = pd.read_sql("SELECT usuario, rol FROM usuarios", conn)
+            u_sel = st.selectbox("Seleccionar Usuario:", df_users['usuario'])
+            
+            pass_n = st.text_input("Cambiar Contraseña:", type="password", help="Dejar vacío si no desea cambiarla")
+            
+            c1, c2 = st.columns(2)
+            if c1.button("💾 Actualizar Clave"):
+                if pass_n:
+                    cursor.execute("UPDATE usuarios SET password=? WHERE usuario=?", (pass_n, u_sel))
+                    registrar_evento("PASSWORD", f"Cambio de clave para {u_sel}")
+                    st.success("Contraseña actualizada.")
+                
+            if c2.button("🗑️ BORRAR PERFIL", type="secondary"):
+                if u_sel == usuario_admin_actual:
+                    st.warning("No puedes borrar tu propio perfil.")
+                else:
+                    cursor.execute("DELETE FROM usuarios WHERE usuario=?", (u_sel,))
+                    registrar_evento("BORRADO", f"Se eliminó el perfil de {u_sel}")
+                    st.success(f"Usuario {u_sel} eliminado.")
+                    st.rerun()
 
-    # --- PESTAÑA 2: GESTIÓN DE GRUPOS ---
+    # --- PESTAÑA 2: GESTIÓN DE GRUPOS (LÓGICA DE EXCLUSIVIDAD) ---
     with tab_g:
-        st.subheader("🏗️ Supervisión y Equipos de Trabajo")
+        st.subheader("🏗️ Configuración de Equipos")
+        
+        # Mostrar tabla de grupos actuales
         df_asig = pd.read_sql("SELECT supervisor as 'Supervisor', GROUP_CONCAT(agente, ', ') as 'Agentes' FROM asignaciones GROUP BY supervisor", conn)
         if not df_asig.empty:
             st.table(df_asig)
         
         st.divider()
-        query_todos = cursor.execute("SELECT usuario, rol FROM usuarios").fetchall()
-        supervisores = [u[0] for u in query_todos if "supervisor" in str(u[1]).lower()]
-        agentes_lista = [u[0] for u in query_todos if "agente" in str(u[1]).lower()]
+        
+        query_total = cursor.execute("SELECT usuario, rol FROM usuarios").fetchall()
+        supervisores = [u[0] for u in query_total if "Supervisor" in u[1]]
+        todos_agentes = [u[0] for u in query_total if "Agente" in u[1]]
 
         if supervisores:
-            sup_sel = st.selectbox("Seleccionar Supervisor:", supervisores)
-            cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (sup_sel,))
-            actuales = [r[0] for r in cursor.fetchall()]
-            seleccion = st.multiselect("Asignar Agentes:", options=agentes_lista, default=actuales)
+            s_sel = st.selectbox("Elegir Supervisor para editar grupo:", supervisores)
+            
+            # Obtener agentes ya asignados a OTROS supervisores
+            cursor.execute("SELECT agente FROM asignaciones WHERE supervisor != ?", (s_sel,))
+            ocupados = [r[0] for r in cursor.fetchall()]
+            
+            # Obtener agentes de ESTE supervisor
+            cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (s_sel,))
+            mis_agentes = [r[0] for r in cursor.fetchall()]
+            
+            # Filtrar lista: Mostrar solo los que no están con nadie O los que ya son míos
+            disponibles = [a for a in todos_agentes if a not in ocupados]
+            
+            seleccion = st.multiselect("Asignar Agentes (solo se muestran disponibles):", 
+                                       options=disponibles, default=mis_agentes)
 
-            if st.button("💾 Guardar Cambios en el Grupo"):
-                cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (sup_sel,))
+            if st.button("💾 Vincular Equipo"):
+                cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (s_sel,))
                 for a in seleccion:
-                    cursor.execute("INSERT INTO asignaciones VALUES (?, ?)", (sup_sel, a))
-                conn.commit()
-                st.success(f"Grupo de {sup_sel} actualizado.")
+                    cursor.execute("INSERT INTO asignaciones VALUES (?, ?)", (s_sel, a))
+                registrar_evento("EQUIPOS", f"Supervisor {s_sel} ahora tiene a cargo: {', '.join(seleccion)}")
+                st.success("Equipo actualizado con éxito.")
                 st.rerun()
-        
-        st.divider()
-        st.markdown("### 📶 Estado de Sincronización")
-        df_offline = pd.read_sql("SELECT registrado_por as Agente, COUNT(*) as 'Pendientes' FROM integrantes WHERE sincronizado = 0 GROUP BY registrado_por", conn)
-        if not df_offline.empty:
-            st.warning("Hay datos locales pendientes de subir.")
-            st.dataframe(df_offline, use_container_width=True)
         else:
-            st.success("✅ Todos los equipos están sincronizados.")
+            st.info("Debe crear usuarios con rol 'Supervisor' primero.")
 
-    # --- PESTAÑA 3: RONDAS ---
+    # --- PESTAÑA 3: RONDAS (CUALQUIER NÚMERO) ---
     with tab_r:
         st.subheader("🔄 Control de Ronda")
-        res = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
-        r_val = int(res[0]) if res else 1
-        nueva_r = st.number_input("Establecer Ronda:", min_value=1, value=r_val)
-        if st.button("Confirmar Ronda"):
-            cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (str(nueva_r),))
-            conn.commit()
-            st.success(f"Iniciada Ronda {nueva_r}")
+        res_r = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
+        r_actual = res_r[0] if res_r else "1"
+        
+        st.info(f"Ronda configurada actualmente: **{r_actual}**")
+        nueva_r = st.text_input("Ingrese nuevo número de ronda (Ej: 2450):", value=r_actual)
+        
+        if st.button("⚙️ Establecer Ronda"):
+            cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (nueva_r,))
+            registrar_evento("RONDA", f"Se cambió la ronda de {r_actual} a {nueva_r}")
+            st.success(f"Sistema actualizado a Ronda {nueva_r}")
+            st.rerun()
 
-    # --- PESTAÑA 4: SISTEMA (AUDITORÍA) ---
+    # --- PESTAÑA 4: SISTEMA Y AUDITORÍA ---
     with tab_s:
-        st.subheader("🚨 Auditoría de Cambios")
-        df_audit = pd.read_sql("SELECT * FROM auditoria ORDER BY id DESC LIMIT 15", conn)
-        st.dataframe(df_audit, use_container_width=True)
+        st.subheader("🚨 Registro de Cambios (Auditoría)")
+        # Traemos los últimos 50 eventos
+        df_audit = pd.read_sql("SELECT fecha as 'Fecha/Hora', usuario as 'Autor', accion as 'Acción', detalles as 'Detalles' FROM auditoria ORDER BY id DESC LIMIT 50", conn)
+        st.dataframe(df_audit, use_container_width=True, hide_index=True)
+        
         st.divider()
+        st.subheader("📦 Respaldo de Seguridad")
         with open('aps_oran_final.db', 'rb') as f:
-            st.download_button("📥 Descargar Backup Sistema", f, "aps_oran_respaldo.db")
+            st.download_button("📥 Descargar Base de Datos Completa", f, f"Backup_APS_Oran_{datetime.now().strftime('%Y%m%d')}.db")
 
     conn.close()
 # ==========================================
@@ -2039,6 +2070,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
