@@ -719,9 +719,14 @@ def inicializar_tablas_sistema():
     conn.commit()
     conn.close()
 # ==========================================
-# BLOQUE 5: NUTRICIÓN (IMC, RONDAS Y EQUIPOS)
+# BLOQUE 5: NUTRICIÓN (IMC, RONDAS, EQUIPOS Y ENTREGA DE LECHE)
 # ==========================================
 def bloque_5_nutricion():
+    import sqlite3
+    import pandas as pd
+    from datetime import date
+    import streamlit as st
+
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Agente')
     ronda_actual_valor, _ = obtener_ronda_info()
@@ -755,7 +760,8 @@ def bloque_5_nutricion():
             st.subheader(f"👤 Paciente: {nombre}")
             st.info(f"Ficha perteneciente al Agente: {agente_cargo}")
             
-            tab_medicion, tab_historial = st.tabs(["📝 Nueva Medición", "📈 Evolución Nutricional"])
+            # --- AGREGAMOS LA TERCERA PESTAÑA DE LECHE ---
+            tab_medicion, tab_leche, tab_historial = st.tabs(["📝 Nueva Medición", "🥛 Entrega de Leche", "📈 Evolución Nutricional"])
             
             with tab_medicion:
                 with st.form("form_nutricion", clear_on_submit=True):
@@ -796,6 +802,42 @@ def bloque_5_nutricion():
                         else:
                             st.error("Error: La talla debe ser mayor a 0.")
 
+            # --- NUEVA FUNCIÓN: REGISTRO DE ENTREGA DE LECHE ---
+            with tab_leche:
+                st.subheader("🥛 Registro de Insumos")
+                with st.form("form_leche_nutricion", clear_on_submit=True):
+                    col_l1, col_l2 = st.columns(2)
+                    cant_leche = col_l1.number_input("Cantidad de cajas (Leche)", min_value=1, max_value=20, step=1)
+                    fecha_leche = col_l2.date_input("Fecha de Entrega", value=date.today())
+                    
+                    if st.form_submit_button("💾 Guardar Entrega"):
+                        try:
+                            # Aseguramos existencia de la tabla registro_leche
+                            conn.execute("""CREATE TABLE IF NOT EXISTS registro_leche 
+                                         (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)""")
+                            
+                            conn.execute("""INSERT INTO registro_leche (dni, fecha, cantidad, ronda, registrado_por) 
+                                         VALUES (?,?,?,?,?)""",
+                                         (dni_n, str(fecha_leche), cant_leche, ronda_actual_valor, usuario_actual))
+                            conn.commit()
+                            st.success(f"✅ Se registraron {cant_leche} cajas de leche para el paciente.")
+                        except Exception as e:
+                            st.error(f"Error al registrar leche: {e}")
+
+                st.divider()
+                st.markdown("### 📅 Historial de Entregas")
+                try:
+                    df_leche = pd.read_sql("""SELECT fecha as 'Fecha', cantidad as 'Cantidad (Cajas)', 
+                                           ronda as 'Ronda', registrado_por as 'Entregado por' 
+                                           FROM registro_leche WHERE dni=? ORDER BY fecha DESC""", 
+                                           conn, params=(dni_n,))
+                    if not df_leche.empty:
+                        st.table(df_leche) # Tabla simple para mejor visualización de fechas
+                    else:
+                        st.info("No hay registros de entrega de leche para este DNI.")
+                except:
+                    st.info("Aún no se han realizado entregas de leche.")
+
             with tab_historial:
                 st.markdown("### 📜 Carnet de Crecimiento")
                 df_hist = pd.read_sql("""SELECT fecha as 'Fecha', peso as 'Peso (kg)', 
@@ -815,20 +857,26 @@ def bloque_5_nutricion():
         conn.close()
     else:
         st.info("👋 Ingrese un DNI para comenzar la evaluación antropométrica.")
+
+# --- ACTUALIZACIÓN DE INICIALIZACIÓN ---
 def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
     # Tabla de Personas
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
+    # Tabla de Viviendas
     cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
     # Tabla de Vacunas
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
+    # Tabla de Crecimiento (Antropometría)
+    cursor.execute("CREATE TABLE IF NOT EXISTS crecimiento (dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT, ronda TEXT)")
     # Tabla de Usuarios y Jerarquía
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
     # Tabla de Configuración (Rondas)
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    # NUEVA TABLA: Registro de Leche
+    cursor.execute("CREATE TABLE IF NOT EXISTS registro_leche (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)")
     
     conn.commit()
     conn.close()
@@ -1834,6 +1882,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
