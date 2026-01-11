@@ -1465,7 +1465,7 @@ def inicializar_tablas_sistema():
     conn.commit()
     conn.close()
 # ==========================================
-# BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS (VERSIÓN MEJORADA)
+# BLOQUE 9: CONFIGURACIÓN, USUARIOS Y RONDAS (VERSIÓN MEJORADA + OFFLINE)
 # ==========================================
 def bloque_9_admin():
     import sqlite3
@@ -1484,23 +1484,32 @@ def bloque_9_admin():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
 
-    # Aseguramos infraestructura de tablas
+    # --- INFRAESTRUCTURA DE TABLAS Y REPARACIÓN OFFLINE ---
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
     cursor.execute("CREATE TABLE IF NOT EXISTS auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, usuario TEXT, accion TEXT, detalles TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    conn.commit()
+    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, nro_casa TEXT, registrado_por TEXT)")
+    
+    # Blindaje contra el error de Pandas: Verificar columna 'sincronizado'
+    try:
+        cursor.execute("SELECT sincronizado FROM integrantes LIMIT 1")
+    except sqlite3.OperationalError:
+        # Si la columna no existe, la creamos (Migración)
+        cursor.execute("ALTER TABLE integrantes ADD COLUMN sincronizado INTEGER DEFAULT 1")
+        conn.commit()
 
     tab_u, tab_g, tab_r, tab_s = st.tabs(["👥 Usuarios", "🏗️ Gestión de Grupos", "🔄 Rondas", "🚨 Sistema"])
 
-    # --- PESTAÑA 1: USUARIOS (SE MANTIENE IGUAL) ---
+    # --- PESTAÑA 1: USUARIOS (INCLUYE CAMBIO DE PASSWORD) ---
     with tab_u:
-        st.subheader("➕ Registrar Nuevo Usuario")
-        with st.expander("Formulario de Registro"):
-            c1, c2, c3 = st.columns(3)
-            nuevo_u = c1.text_input("Usuario:", key="nu").strip().lower()
-            nuevo_p = c2.text_input("Contraseña:", type="password", key="np_admin")
-            nuevo_r = c3.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"], key="nr")
+        col_reg, col_pass = st.columns(2)
+        
+        with col_reg:
+            st.subheader("➕ Nuevo Usuario")
+            nuevo_u = st.text_input("Usuario:", key="nu").strip().lower()
+            nuevo_p = st.text_input("Contraseña:", type="password", key="np_admin")
+            nuevo_r = st.selectbox("Rol:", ["Agente Sanitario", "Supervisor", "Administrador"], key="nr")
             if st.button("🚀 Crear Usuario"):
                 if nuevo_u and nuevo_p:
                     try:
@@ -1510,37 +1519,34 @@ def bloque_9_admin():
                         st.rerun()
                     except: st.error("El usuario ya existe.")
 
-    # --- PESTAÑA 2: GESTIÓN DE GRUPOS (TABLA + EDICIÓN + OFFLINE) ---
+        with col_pass:
+            st.subheader("🔑 Cambiar Contraseña")
+            usuarios_db = pd.read_sql("SELECT usuario FROM usuarios", conn)
+            u_cambio = st.selectbox("Seleccionar Usuario:", usuarios_db['usuario'])
+            pass_nueva = st.text_input("Nueva Contraseña:", type="password", key="pass_change")
+            if st.button("Actualizar Clave"):
+                if pass_nueva:
+                    cursor.execute("UPDATE usuarios SET password = ? WHERE usuario = ?", (pass_nueva, u_cambio))
+                    conn.commit()
+                    st.success(f"Clave de {u_cambio} actualizada.")
+
+    # --- PESTAÑA 2: GESTIÓN DE GRUPOS ---
     with tab_g:
         st.subheader("🏗️ Supervisión y Equipos de Trabajo")
-        
-        # 1. Visualización de Grupos Actuales
-        df_asig = pd.read_sql("""
-            SELECT supervisor as 'Supervisor', GROUP_CONCAT(agente, ', ') as 'Agentes a Cargo' 
-            FROM asignaciones GROUP BY supervisor
-        """, conn)
-
+        df_asig = pd.read_sql("SELECT supervisor as 'Supervisor', GROUP_CONCAT(agente, ', ') as 'Agentes' FROM asignaciones GROUP BY supervisor", conn)
         if not df_asig.empty:
-            st.markdown("### 📋 Equipos Configurados")
-            st.table(df_asig) # Tabla estática para lectura rápida
+            st.table(df_asig)
         
         st.divider()
-
-        # 2. Editor de Grupos
-        st.markdown("### ✏️ Editar / Crear Grupo")
         query_todos = cursor.execute("SELECT usuario, rol FROM usuarios").fetchall()
         supervisores = [u[0] for u in query_todos if "supervisor" in str(u[1]).lower()]
         agentes_lista = [u[0] for u in query_todos if "agente" in str(u[1]).lower()]
 
         if supervisores:
-            col_sup, col_ag = st.columns([1, 2])
-            with col_sup:
-                sup_sel = st.selectbox("Seleccionar Supervisor:", supervisores)
-            with col_ag:
-                # Obtener agentes actuales para pre-cargar el multiselect
-                cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (sup_sel,))
-                actuales = [r[0] for r in cursor.fetchall()]
-                seleccion = st.multiselect("Asignar Agentes:", options=agentes_lista, default=actuales)
+            sup_sel = st.selectbox("Seleccionar Supervisor:", supervisores)
+            cursor.execute("SELECT agente FROM asignaciones WHERE supervisor = ?", (sup_sel,))
+            actuales = [r[0] for r in cursor.fetchall()]
+            seleccion = st.multiselect("Asignar Agentes:", options=agentes_lista, default=actuales)
 
             if st.button("💾 Guardar Cambios en el Grupo"):
                 cursor.execute("DELETE FROM asignaciones WHERE supervisor = ?", (sup_sel,))
@@ -1551,22 +1557,15 @@ def bloque_9_admin():
                 st.rerun()
         
         st.divider()
-
-        # 3. Estado de Sincronización (Offline Support)
-        st.markdown("### 📶 Estado de Sincronización por Agente")
-        # Esta consulta busca en las tablas principales si hay registros con sincronizado = 0
-        df_offline = pd.read_sql("""
-            SELECT registrado_por as Agente, COUNT(*) as 'Registros Pendientes' 
-            FROM integrantes WHERE sincronizado = 0 GROUP BY registrado_por
-        """, conn)
-        
+        st.markdown("### 📶 Estado de Sincronización")
+        df_offline = pd.read_sql("SELECT registrado_por as Agente, COUNT(*) as 'Pendientes' FROM integrantes WHERE sincronizado = 0 GROUP BY registrado_por", conn)
         if not df_offline.empty:
-            st.warning("Hay agentes con datos pendientes de subir a la nube.")
+            st.warning("Hay datos locales pendientes de subir.")
             st.dataframe(df_offline, use_container_width=True)
         else:
             st.success("✅ Todos los equipos están sincronizados.")
 
-    # --- PESTAÑA 3: RONDAS (IGUAL) ---
+    # --- PESTAÑA 3: RONDAS ---
     with tab_r:
         st.subheader("🔄 Control de Ronda")
         res = cursor.execute("SELECT valor FROM config WHERE clave='ronda_actual'").fetchone()
@@ -1575,14 +1574,13 @@ def bloque_9_admin():
         if st.button("Confirmar Ronda"):
             cursor.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES ('ronda_actual', ?)", (str(nueva_r),))
             conn.commit()
-            st.rerun()
+            st.success(f"Iniciada Ronda {nueva_r}")
 
     # --- PESTAÑA 4: SISTEMA (AUDITORÍA) ---
     with tab_s:
         st.subheader("🚨 Auditoría de Cambios")
         df_audit = pd.read_sql("SELECT * FROM auditoria ORDER BY id DESC LIMIT 15", conn)
         st.dataframe(df_audit, use_container_width=True)
-        
         st.divider()
         with open('aps_oran_final.db', 'rb') as f:
             st.download_button("📥 Descargar Backup Sistema", f, "aps_oran_respaldo.db")
@@ -2041,6 +2039,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
