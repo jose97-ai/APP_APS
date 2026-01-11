@@ -719,7 +719,7 @@ def inicializar_tablas_sistema():
     conn.commit()
     conn.close()
 # ==========================================
-# BLOQUE 5: NUTRICIÓN (IMC, RONDAS, EQUIPOS Y ENTREGA DE LECHE)
+# BLOQUE 5: NUTRICIÓN (VERSION FINAL CORREGIDA)
 # ==========================================
 def bloque_5_nutricion():
     import sqlite3
@@ -727,9 +727,15 @@ def bloque_5_nutricion():
     from datetime import date
     import streamlit as st
 
+    # 1. Recuperamos variables de sesión
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Agente')
-    ronda_actual_valor, _ = obtener_ronda_info()
+    
+    # Manejo de error para la ronda si no existe la función
+    try:
+        ronda_actual_valor, _ = obtener_ronda_info()
+    except:
+        ronda_actual_valor = "1"
 
     st.header(f"⚖️ Bloque 5: Evaluación Antropométrica - Ronda {ronda_actual_valor}")
     st.caption(f"Agente/Monitor: {usuario_actual}")
@@ -739,144 +745,115 @@ def bloque_5_nutricion():
     if dni_n:
         conn = obtener_conexion()
         
-        # --- LÓGICA DE PERMISOS SEGÚN ROL ---
-        if rol_actual == "Supervisor":
-            equipo = obtener_equipo_agentes(usuario_actual)
-            placeholders = ', '.join(['?'] * len(equipo))
-            query_p = f"SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
-            params = [dni_n] + equipo
-        elif rol_actual == "Administrador":
-            query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=?"
-            params = [dni_n]
-        else:
-            query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
-            params = [dni_n, usuario_actual]
+        try:
+            # --- LÓGICA DE PERMISOS SEGÚN ROL ---
+            if rol_actual == "Supervisor":
+                equipo = obtener_equipo_agentes(usuario_actual)
+                placeholders = ', '.join(['?'] * len(equipo))
+                query_p = f"SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por IN ({placeholders})"
+                params = [dni_n] + equipo
+            elif rol_actual == "Administrador":
+                query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=?"
+                params = [dni_n]
+            else:
+                query_p = "SELECT nombre, f_nac, registrado_por FROM integrantes WHERE dni=? AND registrado_por=?"
+                params = [dni_n, usuario_actual]
 
-        persona = pd.read_sql(query_p, conn, params=params)
-        
-        if not persona.empty:
-            nombre = persona['nombre'].iloc[0]
-            agente_cargo = persona['registrado_por'].iloc[0]
-            st.subheader(f"👤 Paciente: {nombre}")
-            st.info(f"Ficha perteneciente al Agente: {agente_cargo}")
+            persona = pd.read_sql(query_p, conn, params=params)
             
-            # --- AGREGAMOS LA TERCERA PESTAÑA DE LECHE ---
-            tab_medicion, tab_leche, tab_historial = st.tabs(["📝 Nueva Medición", "🥛 Entrega de Leche", "📈 Evolución Nutricional"])
-            
-            with tab_medicion:
-                with st.form("form_nutricion", clear_on_submit=True):
-                    c1, c2, c3 = st.columns(3)
-                    peso = c1.number_input("Peso (kg)", min_value=0.0, step=0.100, format="%.3f")
-                    talla = c2.number_input("Talla (cm)", min_value=0.0, step=0.5, format="%.1f")
-                    f_control = c3.date_input("Fecha de Control", value=date.today())
-                    
-                    if st.form_submit_button("⚖️ Calcular e Insertar"):
-                        if talla > 0:
-                            # Cálculo de IMC
-                            talla_m = talla / 100
-                            imc = round(peso / (talla_m ** 2), 2)
-                            
-                            try:
+            if not persona.empty:
+                nombre = persona['nombre'].iloc[0]
+                agente_cargo = persona['registrado_por'].iloc[0]
+                st.subheader(f"👤 Paciente: {nombre}")
+                st.info(f"Ficha perteneciente al Agente: {agente_cargo}")
+                
+                tab_medicion, tab_leche, tab_historial = st.tabs(["📝 Nueva Medición", "🥛 Entrega de Leche", "📈 Evolución Nutricional"])
+                
+                with tab_medicion:
+                    with st.form("form_nutricion_v3", clear_on_submit=True):
+                        c1, c2, c3 = st.columns(3)
+                        peso = c1.number_input("Peso (kg)", min_value=0.0, step=0.100, format="%.3f")
+                        talla = c2.number_input("Talla (cm)", min_value=0.0, step=0.5, format="%.1f")
+                        f_control = c3.date_input("Fecha de Control", value=date.today())
+                        
+                        if st.form_submit_button("⚖️ Calcular e Insertar"):
+                            if talla > 0:
+                                talla_m = talla / 100
+                                imc = round(peso / (talla_m ** 2), 2)
+                                
+                                # Insertar datos
                                 conn.execute("""INSERT INTO crecimiento (dni, peso, talla, imc, fecha, registrado_por, ronda) 
                                              VALUES (?,?,?,?,?,?,?)""",
                                             (dni_n, peso, talla, imc, str(f_control), usuario_actual, ronda_actual_valor))
                                 conn.commit()
-                                
-                                # Semáforo de salud
-                                if imc < 18.5:
-                                    st.warning(f"⚠️ IMC: {imc} - Bajo Peso (Riesgo Nutricional)")
-                                elif 18.5 <= imc <= 24.9:
-                                    st.success(f"✅ IMC: {imc} - Peso Normal")
-                                elif 25.0 <= imc <= 29.9:
-                                    st.warning(f"⚠️ IMC: {imc} - Sobrepeso")
-                                else:
-                                    st.error(f"🚨 IMC: {imc} - Obesidad")
-                                    
-                                st.balloons()
-                            except sqlite3.OperationalError:
-                                # Reparación por si no existen las nuevas columnas
-                                conn.execute("ALTER TABLE crecimiento ADD COLUMN registrado_por TEXT")
-                                conn.execute("ALTER TABLE crecimiento ADD COLUMN ronda TEXT")
-                                conn.commit()
-                                st.info("Base de datos actualizada. Reintente guardar.")
-                        else:
-                            st.error("Error: La talla debe ser mayor a 0.")
+                                st.success("✅ Medición guardada correctamente.")
+                                st.rerun()
+                            else:
+                                st.error("La talla debe ser mayor a 0.")
 
-            # --- NUEVA FUNCIÓN: REGISTRO DE ENTREGA DE LECHE ---
-            with tab_leche:
-                st.subheader("🥛 Registro de Insumos")
-                with st.form("form_leche_nutricion", clear_on_submit=True):
-                    col_l1, col_l2 = st.columns(2)
-                    cant_leche = col_l1.number_input("Cantidad de cajas (Leche)", min_value=1, max_value=20, step=1)
-                    fecha_leche = col_l2.date_input("Fecha de Entrega", value=date.today())
-                    
-                    if st.form_submit_button("💾 Guardar Entrega"):
-                        try:
-                            # Aseguramos existencia de la tabla registro_leche
-                            conn.execute("""CREATE TABLE IF NOT EXISTS registro_leche 
-                                         (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)""")
-                            
-                            conn.execute("""INSERT INTO registro_leche (dni, fecha, cantidad, ronda, registrado_por) 
-                                         VALUES (?,?,?,?,?)""",
-                                         (dni_n, str(fecha_leche), cant_leche, ronda_actual_valor, usuario_actual))
+                with tab_leche:
+                    st.subheader("🥛 Registro de Entrega de Leche")
+                    with st.form("form_leche_n", clear_on_submit=True):
+                        c_leche = st.number_input("Cantidad de Cajas", min_value=1, max_value=10, step=1)
+                        f_leche = st.date_input("Fecha", value=date.today())
+                        if st.form_submit_button("💾 Registrar Leche"):
+                            conn.execute("INSERT INTO registro_leche (dni, fecha, cantidad, ronda, registrado_por) VALUES (?,?,?,?,?)",
+                                         (dni_n, str(f_leche), c_leche, ronda_actual_valor, usuario_actual))
                             conn.commit()
-                            st.success(f"✅ Se registraron {cant_leche} cajas de leche para el paciente.")
-                        except Exception as e:
-                            st.error(f"Error al registrar leche: {e}")
-
-                st.divider()
-                st.markdown("### 📅 Historial de Entregas")
-                try:
-                    df_leche = pd.read_sql("""SELECT fecha as 'Fecha', cantidad as 'Cantidad (Cajas)', 
-                                           ronda as 'Ronda', registrado_por as 'Entregado por' 
-                                           FROM registro_leche WHERE dni=? ORDER BY fecha DESC""", 
-                                           conn, params=(dni_n,))
-                    if not df_leche.empty:
-                        st.table(df_leche) # Tabla simple para mejor visualización de fechas
-                    else:
-                        st.info("No hay registros de entrega de leche para este DNI.")
-                except:
-                    st.info("Aún no se han realizado entregas de leche.")
-
-            with tab_historial:
-                st.markdown("### 📜 Carnet de Crecimiento")
-                df_hist = pd.read_sql("""SELECT fecha as 'Fecha', peso as 'Peso (kg)', 
-                                      talla as 'Talla (cm)', imc as 'IMC', ronda as 'Ronda' 
-                                      FROM crecimiento WHERE dni=? ORDER BY fecha DESC""", 
-                                      conn, params=(dni_n,))
-                
-                if not df_hist.empty:
-                    st.dataframe(df_hist, use_container_width=True)
+                            st.success("✅ Entrega registrada.")
                     
-                    # Gráfico comparativo de peso por fecha
-                    st.line_chart(df_hist.set_index('Fecha')['Peso (kg)'])
-                else:
-                    st.warning("No existen mediciones previas para este paciente.")
-        else:
-            st.error("⚠️ **Acceso Denegado:** El paciente no existe o no pertenece a su sector de trabajo/supervisión.")
-        conn.close()
-    else:
-        st.info("👋 Ingrese un DNI para comenzar la evaluación antropométrica.")
+                    st.divider()
+                    st.write("📅 Historial de Entregas:")
+                    df_l = pd.read_sql("SELECT fecha, cantidad, registrado_por FROM registro_leche WHERE dni=? ORDER BY fecha DESC", conn, params=(dni_n,))
+                    st.table(df_l)
 
-# --- ACTUALIZACIÓN DE INICIALIZACIÓN ---
+                with tab_historial:
+                    st.markdown("### 📈 Evolución")
+                    df_h = pd.read_sql("SELECT fecha, peso, talla, imc FROM crecimiento WHERE dni=? ORDER BY fecha DESC", conn, params=(dni_n,))
+                    if not df_h.empty:
+                        st.dataframe(df_h, use_container_width=True)
+                        st.line_chart(df_h.set_index('fecha')['peso'])
+            else:
+                st.error("⚠️ El paciente no existe o no tiene permiso para verlo.")
+
+        except Exception as e:
+            # Si el error es por falta de columnas, las creamos
+            st.warning("Detectada inconsistencia en base de datos. Reparando...")
+            cursor = conn.cursor()
+            try: cursor.execute("ALTER TABLE integrantes ADD COLUMN registrado_por TEXT")
+            except: pass
+            try: cursor.execute("ALTER TABLE crecimiento ADD COLUMN registrado_por TEXT")
+            except: pass
+            try: cursor.execute("ALTER TABLE crecimiento ADD COLUMN ronda TEXT")
+            except: pass
+            conn.commit()
+            st.info("Reparación completada. Por favor, refresque la página (F5).")
+        finally:
+            conn.close()
+
+# ==========================================
+# INICIALIZACIÓN DE TABLAS (CORREGIDA)
+# ==========================================
 def inicializar_tablas_sistema():
+    import sqlite3
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-    # Tabla de Personas
-    cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas
-    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
-    cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Crecimiento (Antropometría)
-    cursor.execute("CREATE TABLE IF NOT EXISTS crecimiento (dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT, ronda TEXT)")
-    # Tabla de Usuarios y Jerarquía
+    
+    # 1. Tabla Integrantes
+    cursor.execute("""CREATE TABLE IF NOT EXISTS integrantes 
+        (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)""")
+    
+    # 2. Tabla Crecimiento (Antropometría)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS crecimiento 
+        (dni TEXT, peso REAL, talla REAL, imc REAL, fecha TEXT, registrado_por TEXT, ronda TEXT)""")
+    
+    # 3. Tabla Registro de Leche (LA NUEVA)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS registro_leche 
+        (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)""")
+    
+    # 4. Otras tablas necesarias
+    cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, prioridad TEXT, registrado_por TEXT, fecha_visita TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
-    # NUEVA TABLA: Registro de Leche
-    cursor.execute("CREATE TABLE IF NOT EXISTS registro_leche (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)")
     
     conn.commit()
     conn.close()
@@ -1882,6 +1859,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
