@@ -328,10 +328,13 @@ def inicializar_tablas_sistema():
     conn.commit()
     conn.close()
 # ==========================================
-# BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS (ACTUALIZADO)
+# BLOQUE 2: EMBARAZADAS Y RECIÉN NACIDOS (ACTUALIZADO CON ENTREGA DE LECHE)
 # ==========================================
 def bloque_2_materno():
-    from datetime import timedelta
+    from datetime import timedelta, date
+    import pandas as pd
+    import sqlite3
+
     # 1. Recuperamos usuario, rol y ronda actual
     usuario_actual = st.session_state.get('usuario_logueado', 'admin')
     rol_actual = st.session_state.get('rol_usuario', 'Agente')
@@ -340,9 +343,9 @@ def bloque_2_materno():
     st.header(f"🤰 Bloque 2: Control Materno-Infantil - Ronda N° {ronda_actual_valor}")
     st.caption(f"Usuario: {usuario_actual} ({rol_actual})")
     
-    tab1, tab2 = st.tabs(["📝 Registrar Control", "📂 Visualización de Datos"])
+    tab1, tab2, tab3 = st.tabs(["📝 Registrar Control", "🥛 Entrega de Leche", "📂 Visualización de Datos"])
 
-    # --- PESTAÑA 1: REGISTRO (Solo agentes o admin) ---
+    # --- PESTAÑA 1: REGISTRO ---
     with tab1:
         dni_m = st.text_input("Ingrese DNI de la embarazada para control", key="dni_m_registro")
         
@@ -370,7 +373,6 @@ def bloque_2_materno():
                 if st.form_submit_button("💾 Guardar Control Materno"):
                     conn = obtener_conexion()
                     try:
-                        # Insertamos incluyendo registrado_por y ronda
                         conn.execute("""INSERT OR REPLACE INTO controles_embarazo 
                             (dni, fum, fpp, fde, m_1ro, m_2do, m_3ro, parto_fecha, parto_lugar, aborto, registrado_por, ronda) 
                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
@@ -379,7 +381,6 @@ def bloque_2_materno():
                         conn.commit()
                         st.success(f"✅ Control de DNI {dni_m} guardado con éxito en Ronda {ronda_actual_valor}.")
                     except sqlite3.OperationalError:
-                        # Auto-reparación de tabla si faltan columnas
                         cursor = conn.cursor()
                         cursor.execute("ALTER TABLE controles_embarazo ADD COLUMN registrado_por TEXT")
                         cursor.execute("ALTER TABLE controles_embarazo ADD COLUMN ronda TEXT")
@@ -390,19 +391,60 @@ def bloque_2_materno():
         else:
             st.warning("Ingrese un DNI para habilitar el formulario de control.")
 
-    # --- PESTAÑA 2: VISUALIZACIÓN (CON FILTRO DE JERARQUÍA) ---
+    # --- NUEVA PESTAÑA: ENTREGA DE LECHE ---
     with tab2:
+        st.subheader("🥛 Registro de Entrega de Leche")
+        dni_leche = st.text_input("Ingrese DNI para entrega de leche", key="dni_leche_reg")
+        
+        if dni_leche:
+            col_l1, col_l2 = st.columns(2)
+            cant_cajas = col_l1.number_input("Cantidad de cajas entregadas", min_value=1, max_value=10, step=1)
+            fecha_entrega = col_l2.date_input("Fecha de entrega", value=date.today())
+            
+            if st.button("💾 Registrar Entrega de Leche"):
+                conn = obtener_conexion()
+                try:
+                    # Crear tabla de leche si no existe
+                    conn.execute("""CREATE TABLE IF NOT EXISTS registro_leche 
+                                 (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)""")
+                    
+                    conn.execute("INSERT INTO registro_leche (dni, fecha, cantidad, ronda, registrado_por) VALUES (?,?,?,?,?)",
+                                 (dni_leche, str(fecha_entrega), cant_cajas, ronda_actual_valor, usuario_actual))
+                    conn.commit()
+                    st.success(f"✅ Se registraron {cant_cajas} cajas para el DNI {dni_leche}.")
+                except Exception as e:
+                    st.error(f"Error al registrar: {e}")
+                finally:
+                    conn.close()
+            
+            st.divider()
+            st.write(f"📊 **Historial de entregas para el DNI {dni_leche}:**")
+            conn = obtener_conexion()
+            try:
+                historial_leche = pd.read_sql("SELECT fecha as 'Fecha', cantidad as 'Cajas', ronda as 'Ronda', registrado_por as 'Agente' FROM registro_leche WHERE dni = ? ORDER BY fecha DESC", conn, params=(dni_leche,))
+                if not historial_leche.empty:
+                    st.table(historial_leche)
+                else:
+                    st.info("No hay entregas previas registradas para este DNI.")
+            except:
+                st.info("Aún no existen registros de leche en la base de datos.")
+            finally:
+                conn.close()
+        else:
+            st.info("Ingrese un DNI para ver el historial o registrar nuevas entregas.")
+
+    # --- PESTAÑA 3: VISUALIZACIÓN ---
+    with tab3:
         st.subheader("📋 Seguimiento de Pacientes")
         conn = obtener_conexion()
         
-        # Aplicamos la lógica de jerarquía para la consulta
         if rol_actual == "Supervisor":
             equipo = obtener_equipo_agentes(usuario_actual)
             placeholders = ', '.join(['?'] * len(equipo))
             filtro_sql = f"WHERE e.registrado_por IN ({placeholders})"
             params = tuple(equipo)
         elif rol_actual == "Administrador":
-            filtro_sql = "" # El admin ve todo Orán
+            filtro_sql = "" 
             params = ()
         else:
             filtro_sql = "WHERE e.registrado_por = ?"
@@ -421,9 +463,7 @@ def bloque_2_materno():
             if not df_partos.empty:
                 st.dataframe(df_partos, use_container_width=True)
                 
-                # Alerta de partos próximos (7 días)
                 hoy = date.today()
-                # Limpiamos fechas para evitar errores de formato
                 df_partos['Fecha Parto Probable'] = pd.to_datetime(df_partos['Fecha Parto Probable']).dt.date
                 proximos = df_partos[(df_partos['Fecha Parto Probable'] <= hoy + timedelta(days=7)) & 
                                      (df_partos['Fecha Real'] == 'None')]
@@ -437,20 +477,19 @@ def bloque_2_materno():
             st.error("Error al cargar la tabla. Asegúrese de que los DNI existan en el Censo (Bloque 1).")
         finally:
             conn.close()
+
+# Actualización de la función de inicialización para incluir la nueva tabla
 def inicializar_tablas_sistema():
     conn = sqlite3.connect('aps_oran_final.db')
     cursor = conn.cursor()
-    # Tabla de Personas
     cursor.execute("CREATE TABLE IF NOT EXISTS integrantes (dni TEXT PRIMARY KEY, nombre TEXT, f_nac TEXT, nro_casa TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Viviendas (con tus campos de prioridad y tenencia)
     cursor.execute("CREATE TABLE IF NOT EXISTS viviendas (nro_casa TEXT PRIMARY KEY, tipo_techo TEXT, tipo_piso TEXT, fuente_agua TEXT, baño_tipo TEXT, prioridad TEXT, tenencia TEXT, registrado_por TEXT, fecha_visita TEXT)")
-    # Tabla de Vacunas
     cursor.execute("CREATE TABLE IF NOT EXISTS vacunas (dni TEXT, vacuna TEXT, dosis TEXT, fecha TEXT, lote TEXT, ronda TEXT, registrado_por TEXT)")
-    # Tabla de Usuarios y Jerarquía
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (usuario TEXT PRIMARY KEY, password TEXT, rol TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS asignaciones (supervisor TEXT, agente TEXT, PRIMARY KEY (supervisor, agente))")
-    # Tabla de Configuración (Rondas)
     cursor.execute("CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)")
+    # Nueva tabla para leche
+    cursor.execute("CREATE TABLE IF NOT EXISTS registro_leche (dni TEXT, fecha TEXT, cantidad INTEGER, ronda TEXT, registrado_por TEXT)")
     
     conn.commit()
     conn.close()
@@ -1795,6 +1834,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
